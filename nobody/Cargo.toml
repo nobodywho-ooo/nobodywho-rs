@@ -1,0 +1,12 @@
+[package]
+name = "nobody"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"] # Compile this crate to a dynamic C library.
+
+[dependencies]
+encoding_rs = "0.8.34"
+godot = { git = "https://github.com/godot-rust/gdext", branch = "master" }
+llama-cpp-2 = "0.1.68"

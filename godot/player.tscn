@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3 uid="uid://breb76ad7m6xn"]
+
+[ext_resource type="Script" path="res://prompt.gd" id="1_yai4m"]
+
+[node name="Sprite2D" type="NobodyPrompt"]
+script = ExtResource("1_yai4m")
