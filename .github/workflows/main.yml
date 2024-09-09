@@ -1,9 +1,9 @@
-name: "Build with nix"
+name: "Build"
 on:
   pull_request:
   push:
 jobs:
-  tests:
+  nix-build:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
@@ -11,3 +11,14 @@ jobs:
       with:
         nix_path: nixpkgs=channel:nixos-unstable
     - run: nix build
+
+  cargo-build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [x86_64-pc-windows-gnu, x86_64-unknown-linux-gnu]
+    steps:
+    - uses: actions/checkout@v4
+    - uses: rust-build/rust-build.action@v1.4.5
+
