@@ -18,31 +18,83 @@ unsafe impl ExtensionLibrary for NobodyExtension {}
 
 #[derive(GodotClass)]
 #[class(base=Node)]
+struct NobodyModel {
+    model_path: String,
+    seed: u32,
+}
+
+#[godot_api]
+impl INode for NobodyModel {
+    fn init(_base: Base<Node>) -> Self {
+        let model_path = "model.bin";
+        let seed = 1234;
+
+        Self {
+            model_path: model_path.into(),
+            seed,
+        }
+    }
+}
+
+fn model_worker(model_path: String, seed: u32) {
+    let backend = LlamaBackend::init().unwrap();
+
+    // Metal baby (all layers on GPU)
+    let model_params = LlamaModelParams::default().with_n_gpu_layers(1000);
+    let model = LlamaModel::load_from_file(&backend, model_path.clone(), &model_params).unwrap();
+
+    let ctx_params = LlamaContextParams::default()
+        .with_n_ctx(Some(NonZeroU32::new(2048).unwrap()))
+        .with_seed(seed);
+
+    let ctx = model.new_context(&backend, ctx_params).unwrap();
+
+    // XXX: get text from client
+    let prompt = "Hi there!";
+    let tokens_list = model
+        .str_to_token(&prompt.to_string(), AddBos::Always)
+        .unwrap();
+
+    if tokens_list.len() >= ctx.n_ctx() as usize {
+        // TODO: don't die so hard
+        panic!(
+            "The given text is longer than the allowed context size ({} > {})",
+            tokens_list.len(),
+            ctx.n_ctx()
+        );
+    }
+
+    // init
+    let max_sequences = 1;
+    let mut batch = LlamaBatch::new(tokens_list.len(), max_sequences);
+
+    let last_index: i32 = (tokens_list.len() - 1) as i32;
+    for (i, token) in (0_i32..).zip(tokens_list.into_iter()) {
+        // llama_decode will output logits only for the last token of the prompt
+        let is_last = i == last_index;
+        batch.add(token, i, &[0], is_last).unwrap();
+    }
+}
+
+impl NobodyModel {
+    fn load_model(&self) {}
+}
+
+#[derive(GodotClass)]
+#[class(base=Node)]
 struct NobodyPrompt {
-    backend: LlamaBackend,
-    model: LlamaModel,
-    base: Base<Node>,
+    #[export]
+    model_node: Option<Gd<NobodyModel>>,
 }
 
 #[godot_api]
 impl INode for NobodyPrompt {
-    fn init(base: Base<Node>) -> Self {
+    fn init(_base: Base<Node>) -> Self {
         godot_print!("Hello, world!"); // Prints to the Godot console
 
-        let backend = LlamaBackend::init().unwrap();
+        let model_node = None;
 
-        // Metal baby (all layers on GPU)
-        let model_params = LlamaModelParams::default().with_n_gpu_layers(1000);
-
-        let model_path = "model.bin";
-
-        let model = LlamaModel::load_from_file(&backend, model_path, &model_params).unwrap();
-
-        Self {
-            backend,
-            model,
-            base,
-        }
+        Self { model_node }
     }
 }
 
@@ -50,20 +102,7 @@ impl INode for NobodyPrompt {
 impl NobodyPrompt {
     #[func]
     fn say(&self, prompt: GString) {
-        let mut ctx_params = LlamaContextParams::default()
-            .with_n_ctx(Some(NonZeroU32::new(2048).unwrap()))
-            .with_seed(1234);
-
-        let mut ctx = self.model.new_context(&self.backend, ctx_params).unwrap();
-
         // tokenize the prompt
-        let tokens_list = self
-            .model
-            .str_to_token(&prompt.to_string(), AddBos::Always)
-            .unwrap();
-
-        // TODO: set the length of the prompt + output in tokens
-        let n_len = 32;
 
         if tokens_list.len() >= usize::try_from(n_len).unwrap() {
             panic!("the prompt is too long, it has more tokens than n_len")
