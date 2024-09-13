@@ -15,137 +15,178 @@ use std::sync::mpsc::{Receiver, Sender};
 
 struct NobodyExtension;
 
-fn run_llama_worker(sender: Sender<String>, receiver: Receiver<String>) {
-    let n_len = 128;
-
-    let model_path = "model.bin";
-
-    let backend = LlamaBackend::init().expect("Failed to initialize LlamaBackend");
-
-    // Offload the model to the GPU
-    let model_params = LlamaModelParams::default().with_n_gpu_layers(1000);
-
-    let model_params = pin!(model_params);
-
-    let model = LlamaModel::load_from_file(&backend, model_path, &model_params).unwrap();
-
-    let ctx_params = LlamaContextParams::default()
-        .with_n_ctx(NonZeroU32::new(2048))
-        .with_seed(1234);
-
-    std::thread::spawn(move || {
-        let mut ctx = model.new_context(&backend, ctx_params).unwrap();
-
-        loop {
-            let prompt = receiver.recv().unwrap();
-            let tokens_list = model.str_to_token(&prompt, AddBos::Always).unwrap();
-
-            let n_cxt = ctx.n_ctx() as i32;
-            let n_kv_req = tokens_list.len() as i32 + (n_len - tokens_list.len() as i32);
-
-            // make sure the KV cache is big enough to hold all the prompt and generated tokens
-            if n_kv_req > n_cxt {
-                panic!(
-                    "n_kv_req > n_ctx, the required kv cache size is not big enough
-     either reduce n_len or increase n_ctx"
-                )
-            }
-
-            if tokens_list.len() >= n_len.try_into().unwrap() {
-                panic!("the prompt is too long, it has more tokens than n_len")
-            }
-
-            // print the prompt token-by-token
-            for token in &tokens_list {
-                godot_print!("{}", model.token_to_str(*token, Special::Tokenize).unwrap());
-            }
-
-            // create a llama_batch with size 512
-            // we use this object to submit token data for decoding
-            let mut batch = LlamaBatch::new(512, 1);
-
-            let last_index: i32 = (tokens_list.len() - 1) as i32;
-            for (i, token) in (0_i32..).zip(tokens_list.into_iter()) {
-                // llama_decode will output logits only for the last token of the prompt
-                let is_last = i == last_index;
-                batch.add(token, i, &[0], is_last).unwrap();
-            }
-
-            ctx.decode(&mut batch).unwrap();
-
-            // main loop
-            let mut n_cur = batch.n_tokens();
-
-            // The `Decoder`
-            let mut decoder = encoding_rs::UTF_8.new_decoder();
-
-            while n_cur <= n_len {
-                // sample the next token
-                {
-                    let candidates = ctx.candidates_ith(batch.n_tokens() - 1);
-
-                    let candidates_p = LlamaTokenDataArray::from_iter(candidates, false);
-
-                    // sample the most likely token
-                    let new_token_id = ctx.sample_token_greedy(candidates_p);
-
-                    // is it an end of stream?
-                    if new_token_id == model.token_eos() {
-                        godot_print!("");
-                        break;
-                    }
-
-                    let output_bytes = model
-                        .token_to_bytes(new_token_id, Special::Tokenize)
-                        .unwrap();
-
-                    // use `Decoder.decode_to_string()` to avoid the intermediate buffer
-                    let mut output_string = String::with_capacity(32);
-                    let _decode_result =
-                        decoder.decode_to_string(&output_bytes, &mut output_string, false);
-
-                    sender.send(output_string).unwrap();
-
-                    batch.clear();
-                    batch.add(new_token_id, n_cur, &[0], true).unwrap();
-                }
-
-                n_cur += 1;
-
-                ctx.decode(&mut batch).unwrap();
-            }
-        }
-    });
-}
-
 #[gdextension]
 unsafe impl ExtensionLibrary for NobodyExtension {}
+
+enum ActorMessage {
+    GetCompletion {
+        prompt: String,
+        respond_to: Sender<String>,
+    },
+}
+
+struct LlamaActor {
+    n_len: i32,
+    model_path: String,
+    receiver: Receiver<ActorMessage>,
+}
+
+impl LlamaActor {
+    fn run(self) {
+        let backend = LlamaBackend::init().expect("Failed to initialize LlamaBackend");
+
+        // Offload the model to the GPU
+        let model_params = LlamaModelParams::default().with_n_gpu_layers(1000);
+
+        let model_params = pin!(model_params);
+
+        let model = LlamaModel::load_from_file(&backend, self.model_path, &model_params).unwrap();
+
+        let ctx_params = LlamaContextParams::default()
+            .with_n_ctx(NonZeroU32::new(2048))
+            .with_seed(1234);
+
+        std::thread::spawn(move || {
+            let mut ctx = model.new_context(&backend, ctx_params).unwrap();
+
+            while let Ok(ActorMessage::GetCompletion { prompt, respond_to }) = self.receiver.recv()
+            {
+                let tokens_list = model.str_to_token(&prompt, AddBos::Always).unwrap();
+
+                let n_cxt = ctx.n_ctx() as i32;
+                let n_kv_req = tokens_list.len() as i32 + (self.n_len - tokens_list.len() as i32);
+
+                // make sure the KV cache is big enough to hold all the prompt and generated tokens
+                if n_kv_req > n_cxt {
+                    panic!(
+                        "n_kv_req > n_ctx, the required kv cache size is not big enough
+         either reduce n_len or increase n_ctx"
+                    )
+                }
+
+                if tokens_list.len() >= self.n_len.try_into().unwrap() {
+                    panic!("the prompt is too long, it has more tokens than n_len")
+                }
+
+                // print the prompt token-by-token
+                for token in &tokens_list {
+                    godot_print!("{}", model.token_to_str(*token, Special::Tokenize).unwrap());
+                }
+
+                // create a llama_batch with size 512
+                // we use this object to submit token data for decoding
+                let mut batch = LlamaBatch::new(512, 1);
+
+                let last_index: i32 = (tokens_list.len() - 1) as i32;
+                for (i, token) in (0_i32..).zip(tokens_list.into_iter()) {
+                    // llama_decode will output logits only for the last token of the prompt
+                    let is_last = i == last_index;
+                    batch.add(token, i, &[0], is_last).unwrap();
+                }
+
+                ctx.decode(&mut batch).unwrap();
+
+                // main loop
+                let mut n_cur = batch.n_tokens();
+
+                // The `Decoder`
+                let mut decoder = encoding_rs::UTF_8.new_decoder();
+
+                while n_cur <= self.n_len {
+                    // sample the next token
+                    {
+                        let candidates = ctx.candidates_ith(batch.n_tokens() - 1);
+
+                        let candidates_p = LlamaTokenDataArray::from_iter(candidates, false);
+
+                        // sample the most likely token
+                        let new_token_id = ctx.sample_token_greedy(candidates_p);
+
+                        // is it an end of stream?
+                        if new_token_id == model.token_eos() {
+                            godot_print!("");
+                            break;
+                        }
+
+                        let output_bytes = model
+                            .token_to_bytes(new_token_id, Special::Tokenize)
+                            .unwrap();
+
+                        // use `Decoder.decode_to_string()` to avoid the intermediate buffer
+                        let mut output_string = String::with_capacity(32);
+                        let _decode_result =
+                            decoder.decode_to_string(&output_bytes, &mut output_string, false);
+
+                        respond_to.send(output_string).unwrap();
+
+                        batch.clear();
+                        batch.add(new_token_id, n_cur, &[0], true).unwrap();
+                    }
+
+                    n_cur += 1;
+
+                    ctx.decode(&mut batch).unwrap();
+                }
+            }
+        });
+    }
+}
+
+struct LlamaActorHandle {
+    sender: Sender<ActorMessage>,
+}
+
+impl LlamaActorHandle {
+    fn new() -> Self {
+        let (sender, receiver) = std::sync::mpsc::channel();
+        let actor = LlamaActor {
+            n_len: 1024,
+            model_path: "model.bin".to_string(),
+            receiver,
+        };
+
+        actor.run();
+
+        LlamaActorHandle { sender }
+    }
+
+    fn get_completion(&self, prompt: String, tx: Sender<String>) {
+        self.sender
+            .send(ActorMessage::GetCompletion {
+                prompt,
+                respond_to: tx,
+            })
+            .unwrap();
+    }
+}
 
 #[derive(GodotClass)]
 #[class(base=Node)]
 struct NobodyPrompt {
-    sender: Sender<String>,
-    receiver: Receiver<String>,
+    llama_actor: LlamaActorHandle,
+
+    rx: Receiver<String>,
+    tx: Sender<String>,
+
     base: Base<Node>,
 }
 
 #[godot_api]
 impl INode for NobodyPrompt {
     fn init(base: Base<Node>) -> Self {
-        let (tx1, rx1) = std::sync::mpsc::channel();
-        let (tx2, rx2) = std::sync::mpsc::channel();
+        let (tx, rx) = std::sync::mpsc::channel();
+        let llama_actor = LlamaActorHandle::new();
 
-        run_llama_worker(tx1, rx2);
-
-        NobodyPrompt {
-            sender: tx2,
-            receiver: rx1,
+        Self {
+            llama_actor,
+            rx,
+            tx,
             base,
         }
     }
 
     fn physics_process(&mut self, _delta: f64) {
-        if let Ok(token) = self.receiver.try_recv() {
+        if let Ok(token) = self.rx.try_recv() {
             self.base_mut()
                 .emit_signal("completion_updated".into(), &[Variant::from(token)]);
         }
@@ -156,7 +197,7 @@ impl INode for NobodyPrompt {
 impl NobodyPrompt {
     #[func]
     fn prompt(&self, prompt: String) {
-        self.sender.send(prompt).unwrap();
+        self.llama_actor.get_completion(prompt, self.tx.clone());
     }
 
     #[signal]
