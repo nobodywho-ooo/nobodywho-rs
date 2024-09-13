@@ -4,3 +4,5 @@
 
 [node name="Sprite2D" type="NobodyPrompt"]
 script = ExtResource("1_yai4m")
+
+[connection signal="completion_updated" from="." to="." method="_on_completion_updated"]
