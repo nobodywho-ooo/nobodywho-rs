@@ -1,9 +1,9 @@
-name: "Build with nix"
+name: "Build and test"
 on:
   pull_request:
   push:
 jobs:
-  tests:
+  nix-build:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
@@ -11,3 +11,40 @@ jobs:
       with:
         nix_path: nixpkgs=channel:nixos-unstable
     - run: nix build
+
+  cargo-build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target: 
+          - "x86_64-pc-windows-gnu"
+          - "x86_64-unknown-linux-gnu"
+        toolchain:
+          - "stable"
+    steps:
+      - uses: actions/checkout@v4
+      - run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
+      - run: rustup target add ${{ matrix.target }}
+      - run: cargo build --verbose
+        working-directory: ./nobody
+      - run: cargo test -- --nocapture
+        working-directory: ./nobody
+
+  cargo-test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target: 
+          - "x86_64-pc-windows-gnu"
+          - "x86_64-unknown-linux-gnu"
+        toolchain:
+          - "stable"
+    steps:
+      - uses: actions/checkout@v4
+      - run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
+      - run: rustup target add ${{ matrix.target }}
+      - run: wget "https://huggingface.co/bartowski/gemma-2-2b-it-GGUF/resolve/main/gemma-2-2b-it-Q5_K_M.gguf" -o ./nobody/model.bin
+      - run: cargo test -- --nocapture
+        working-directory: ./nobody
