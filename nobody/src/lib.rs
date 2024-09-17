@@ -5,7 +5,7 @@ use godot::prelude::*;
 
 use std::sync::mpsc::{Receiver, Sender};
 
-use crate::model::ModelActorHandle;
+use crate::model::ModelActor;
 
 struct NobodyExtension;
 
@@ -15,7 +15,7 @@ unsafe impl ExtensionLibrary for NobodyExtension {}
 #[derive(GodotClass)]
 #[class(base=Node)]
 struct NobodyPrompt {
-    model_actor: ModelActorHandle,
+    model_actor: ModelActor,
 
     rx: Receiver<String>,
     tx: Sender<String>,
@@ -28,14 +28,9 @@ impl INode for NobodyPrompt {
     fn init(base: Base<Node>) -> Self {
         let (tx, rx) = std::sync::mpsc::channel();
         let model_actor =
-            ModelActorHandle::from_model_path_and_seed("./model.bin".to_string(), 1234);
+            ModelActor::from_model_path("./model.bin".to_string()).with_seed(1234);
 
-        Self {
-            model_actor,
-            rx,
-            tx,
-            base,
-        }
+        Self { model_actor, rx, tx, base, }
     }
 
     fn physics_process(&mut self, _delta: f64) {

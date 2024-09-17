@@ -17,10 +17,47 @@ enum ActorMessage {
     },
 }
 
-struct ModelActor {
+pub struct ModelActor {
     seed: u32,
     model_path: String,
-    receiver: Receiver<ActorMessage>,
+    sender: Option<Sender<ActorMessage>>,
+}
+
+
+impl ModelActor {
+    pub fn from_model_path(model_path: String) -> Self {
+        let seed = 1234; // default seed
+        Self { seed, model_path, sender: None }
+    }
+
+    pub fn with_seed(self, seed: u32) -> Self {
+        //! set seed
+        //! XXX: only works if `run` has not been called yet
+        Self { seed, ..self }
+    }
+
+    pub fn run(&mut self) {
+        // loads model and starts thread
+        // TODO: can we give better errors here?
+        let model_path = self.model_path.clone();
+        let seed = self.seed;
+        let (sender, receiver) = std::sync::mpsc::channel();
+        self.sender = Some(sender);
+        std::thread::spawn(move || model_worker(model_path, seed, receiver));
+    }
+
+    pub fn get_completion(&self, prompt: String, tx: Sender<String>) {
+        if let Some(sender) = &(self.sender) {
+            sender
+            .send(ActorMessage::GetCompletion {
+                prompt,
+                respond_to: tx,
+            })
+            .unwrap();
+        } else {
+            panic!("Model actor is not running. Call run() first.");
+        }
+    }
 }
 
 fn model_worker(model_path: String, seed: u32, receiver: Receiver<ActorMessage>) {
@@ -112,54 +149,6 @@ fn model_worker(model_path: String, seed: u32, receiver: Receiver<ActorMessage>)
     }
 }
 
-impl ModelActor {
-    fn from_model_path(model_path: String) -> Self {
-        let (_, receiver) = std::sync::mpsc::channel();
-        let seed = 1234;
-        Self {
-            seed,
-            model_path,
-            receiver,
-        }
-    }
-    fn run(self) {
-        let model_path = self.model_path.clone();
-        let seed = self.seed;
-        std::thread::spawn(move || model_worker(model_path, seed, self.receiver));
-    }
-}
-
-pub struct ModelActorHandle {
-    sender: Sender<ActorMessage>,
-}
-
-impl ModelActorHandle {
-    pub fn from_model_path_and_seed(model_path: String, seed: u32) -> Self {
-        let (sender, receiver) = std::sync::mpsc::channel();
-        let actor = ModelActor {
-            seed,
-            model_path,
-            receiver,
-        };
-
-        actor.run();
-
-        ModelActorHandle { sender }
-    }
-
-    pub fn from_model_path(model_path: String) -> Self {
-        Self::from_model_path_and_seed(model_path, 1234)
-    }
-
-    pub fn get_completion(&self, prompt: String, tx: Sender<String>) {
-        self.sender
-            .send(ActorMessage::GetCompletion {
-                prompt,
-                respond_to: tx,
-            })
-            .unwrap();
-    }
-}
 
 #[cfg(test)]
 mod tests {
@@ -168,7 +157,8 @@ mod tests {
     #[test]
     fn test_generation() {
         println!("running test!");
-        let actor = ModelActorHandle::from_model_path("./model.bin".to_string());
+        let mut actor = ModelActor::from_model_path("./model.bin".to_string()).with_seed(1337);
+        actor.run();
         let (tx, rx) = std::sync::mpsc::channel();
         actor.get_completion("Count to five: 1, 2, ".to_string(), tx.clone());
         assert_eq!(rx.recv(), Ok("3".to_string()));
