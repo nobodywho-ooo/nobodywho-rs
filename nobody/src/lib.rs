@@ -27,7 +27,8 @@ struct NobodyPrompt {
 impl INode for NobodyPrompt {
     fn init(base: Base<Node>) -> Self {
         let (tx, rx) = std::sync::mpsc::channel();
-        let model_actor = ModelActorHandle::from_model_path_and_seed("./model.bin".to_string(), 1234);
+        let model_actor =
+            ModelActorHandle::from_model_path_and_seed("./model.bin".to_string(), 1234);
 
         Self {
             model_actor,

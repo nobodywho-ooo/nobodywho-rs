@@ -1,6 +1,6 @@
-use std::sync::mpsc::{Receiver, Sender};
 use std::num::NonZeroU32;
 use std::pin::pin;
+use std::sync::mpsc::{Receiver, Sender};
 
 use llama_cpp_2::context::params::LlamaContextParams;
 use llama_cpp_2::llama_backend::LlamaBackend;
@@ -9,7 +9,6 @@ use llama_cpp_2::model::params::LlamaModelParams;
 use llama_cpp_2::model::LlamaModel;
 use llama_cpp_2::model::{AddBos, Special};
 use llama_cpp_2::token::data_array::LlamaTokenDataArray;
-
 
 enum ActorMessage {
     GetCompletion {
@@ -40,8 +39,7 @@ fn model_worker(model_path: String, seed: u32, receiver: Receiver<ActorMessage>)
 
     let mut ctx = model.new_context(&backend, ctx_params).unwrap();
 
-    while let Ok(ActorMessage::GetCompletion { prompt, respond_to }) = receiver.recv()
-    {
+    while let Ok(ActorMessage::GetCompletion { prompt, respond_to }) = receiver.recv() {
         let tokens_list = model.str_to_token(&prompt, AddBos::Always).unwrap();
 
         // print the prompt token-by-token
@@ -138,7 +136,11 @@ pub struct ModelActorHandle {
 impl ModelActorHandle {
     pub fn from_model_path_and_seed(model_path: String, seed: u32) -> Self {
         let (sender, receiver) = std::sync::mpsc::channel();
-        let actor = ModelActor { seed, model_path, receiver };
+        let actor = ModelActor {
+            seed,
+            model_path,
+            receiver,
+        };
 
         actor.run();
 
