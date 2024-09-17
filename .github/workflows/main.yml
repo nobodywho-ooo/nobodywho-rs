@@ -28,8 +28,6 @@ jobs:
       - run: rustup target add ${{ matrix.target }}
       - run: cargo build --verbose
         working-directory: ./nobody
-      - run: cargo test -- --nocapture
-        working-directory: ./nobody
 
   cargo-test:
     runs-on: ubuntu-latest
