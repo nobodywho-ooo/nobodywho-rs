@@ -42,6 +42,10 @@ impl ModelActor {
         Self { seed, ..self }
     }
 
+    pub fn with_model_path(self, model_path: String) -> Self {
+        Self { model_path, ..self }
+    }
+
     pub fn run(&mut self) {
         // loads model and starts thread
         // TODO: can we give better errors here?
@@ -187,7 +191,7 @@ fn model_worker(model_path: String, seed: u32, receiver: Receiver<ActorMessage>)
             Err(_) => {
                 // receiver is no longer attached to a sender
                 // this must mean that we can safely kill this worker
-                // (there is no longer any way to give it no tasks)
+                // since there is no longer any way to give it new tasks
                 return
             },
         }
@@ -226,6 +230,7 @@ mod tests {
             println!("Got: {}", &str);
             response += str.as_str();
         }
+        dbg!(&response);
         let expected = "Hello, world!";
         assert_eq!(&response[..expected.len()], expected);
     }
