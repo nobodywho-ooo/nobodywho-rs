@@ -7,9 +7,12 @@ use llama_cpp_2::context::LlamaContext;
 use llama_cpp_2::llama_backend::LlamaBackend;
 use llama_cpp_2::llama_batch::LlamaBatch;
 use llama_cpp_2::model::params::LlamaModelParams;
-use llama_cpp_2::model::{LlamaModel, LlamaChatMessage, AddBos, Special};
+use llama_cpp_2::model::{AddBos, LlamaChatMessage, LlamaModel, Special};
 use llama_cpp_2::token::data_array::LlamaTokenDataArray;
+use std::sync::LazyLock;
 
+static LLAMA_BACKEND: LazyLock<LlamaBackend> =
+    LazyLock::new(|| LlamaBackend::init().expect("Failed to initialize llama backend"));
 
 #[derive(Debug)]
 enum ActorMessage {
@@ -19,8 +22,8 @@ enum ActorMessage {
     },
     GetChatResponse {
         text: String,
-        respond_to: Sender<String>
-    }
+        respond_to: Sender<String>,
+    },
 }
 
 pub struct ModelActor {
@@ -29,11 +32,14 @@ pub struct ModelActor {
     sender: Option<Sender<ActorMessage>>,
 }
 
-
 impl ModelActor {
     pub fn from_model_path(model_path: String) -> Self {
         let seed = 1234; // default seed
-        Self { seed, model_path, sender: None }
+        Self {
+            seed,
+            model_path,
+            sender: None,
+        }
     }
 
     pub fn with_seed(self, seed: u32) -> Self {
@@ -59,11 +65,11 @@ impl ModelActor {
     pub fn get_completion(&self, prompt: String, tx: Sender<String>) {
         if let Some(sender) = &(self.sender) {
             sender
-            .send(ActorMessage::GetCompletion {
-                prompt,
-                respond_to: tx,
-            })
-            .unwrap();
+                .send(ActorMessage::GetCompletion {
+                    prompt,
+                    respond_to: tx,
+                })
+                .unwrap();
         } else {
             panic!("Model actor is not running. Call run() first.");
         }
@@ -75,15 +81,21 @@ impl ModelActor {
             sender
                 .send(ActorMessage::GetChatResponse {
                     text,
-                    respond_to: tx
-                }).unwrap();
+                    respond_to: tx,
+                })
+                .unwrap();
         } else {
             panic!("Model actor is not running. Call run() first.");
         }
     }
 }
 
-fn get_completion(ctx: &mut LlamaContext, model: &LlamaModel, prompt: &str, respond_to: &Sender<String>) {
+fn get_completion(
+    ctx: &mut LlamaContext,
+    model: &LlamaModel,
+    prompt: &str,
+    respond_to: &Sender<String>,
+) {
     let tokens_list = model.str_to_token(&prompt, AddBos::Always).unwrap();
 
     // print the prompt token-by-token
@@ -156,14 +168,12 @@ fn get_completion(ctx: &mut LlamaContext, model: &LlamaModel, prompt: &str, resp
 }
 
 fn model_worker(model_path: String, seed: u32, receiver: Receiver<ActorMessage>) {
-    let backend = LlamaBackend::init().expect("Failed to initialize LlamaBackend");
-
     // Offload the model to the GPU
     let model_params = LlamaModelParams::default().with_n_gpu_layers(1000);
 
     let model_params = pin!(model_params);
 
-    let model = LlamaModel::load_from_file(&backend, model_path, &model_params).unwrap();
+    let model = LlamaModel::load_from_file(&LLAMA_BACKEND, model_path, &model_params).unwrap();
 
     let n_threads = num_cpus::get() as i32;
     let ctx_params = LlamaContextParams::default()
@@ -172,7 +182,7 @@ fn model_worker(model_path: String, seed: u32, receiver: Receiver<ActorMessage>)
         .with_n_threads(n_threads)
         .with_n_threads_batch(n_threads);
 
-    let mut ctx = model.new_context(&backend, ctx_params).unwrap();
+    let mut ctx = model.new_context(&LLAMA_BACKEND, ctx_params).unwrap();
 
     loop {
         let got = receiver.recv();
@@ -186,19 +196,19 @@ fn model_worker(model_path: String, seed: u32, receiver: Receiver<ActorMessage>)
                 // XXX: this gets a BuffSizeError if the chat history is very short
                 let expanded_text = model.apply_chat_template(None, chat, true).unwrap();
                 get_completion(&mut ctx, &model, &expanded_text, &respond_to)
-            },
-            Ok(ActorMessage::GetCompletion { prompt, respond_to }) => get_completion(&mut ctx, &model, &prompt, &respond_to),
+            }
+            Ok(ActorMessage::GetCompletion { prompt, respond_to }) => {
+                get_completion(&mut ctx, &model, &prompt, &respond_to)
+            }
             Err(_) => {
                 // receiver is no longer attached to a sender
                 // this must mean that we can safely kill this worker
                 // since there is no longer any way to give it new tasks
-                return
-            },
+                return;
+            }
         }
     }
-
 }
-
 
 #[cfg(test)]
 mod tests {
