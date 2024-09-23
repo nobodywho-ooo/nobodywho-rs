@@ -20,6 +20,7 @@ jobs:
           . "$HOME/.cargo/env"
           rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
           rustup target add ${{ matrix.target }}
+          echo "::add-path::$HOME/.cargo/bin"
       - run: cargo build --verbose
         working-directory: ./nobody
 
