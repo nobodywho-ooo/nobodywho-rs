@@ -4,7 +4,7 @@ on:
   push:
 jobs:
   cargo-build:
-    runs-on: ubuntu-latest
+    runs-on: Linux
     strategy:
       fail-fast: false
       matrix:
