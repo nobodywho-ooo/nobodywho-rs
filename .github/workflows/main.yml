@@ -21,9 +21,11 @@ jobs:
           rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
           rustup target add ${{ matrix.target }}
           echo "$HOME/.cargo/bin" >> $GITHUB_PATH
-     - run: |
+
+      - run: |
         sudo apt-get update
         sudo apt-get install -y libclang-dev
+
       - run: cargo build --verbose
         working-directory: ./nobody
 
