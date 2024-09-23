@@ -15,10 +15,11 @@ jobs:
           - "stable"
     steps:
       - uses: actions/checkout@v4
-      - run: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-      - run: . "$HOME/.cargo/env"
-      - run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
-      - run: rustup target add ${{ matrix.target }}
+      - run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+          . "$HOME/.cargo/env"
+          rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
+          rustup target add ${{ matrix.target }}
       - run: cargo build --verbose
         working-directory: ./nobody
 
