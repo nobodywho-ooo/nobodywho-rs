@@ -21,7 +21,6 @@ jobs:
           rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
           rustup target add ${{ matrix.target }}
           echo "$HOME/.cargo/bin" >> $GITHUB_PATH
-
       - run: |
           sudo apt-get update
           sudo apt-get install -y libclang-dev
@@ -30,7 +29,7 @@ jobs:
         working-directory: ./nobody
 
   cargo-test:
-    runs-on: ubuntu-latest
+    runs-on: Linux
     strategy:
       fail-fast: false
       matrix:
@@ -41,8 +40,16 @@ jobs:
           - "stable"
     steps:
       - uses: actions/checkout@v4
-      - run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
-      - run: rustup target add ${{ matrix.target }}
+      - run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+          . "$HOME/.cargo/env"
+          rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
+          rustup target add ${{ matrix.target }}
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+      - run: |
+          sudo apt-get update
+          sudo apt-get install -y libclang-dev
+
       - run: wget "https://huggingface.co/bartowski/gemma-2-2b-it-GGUF/resolve/main/gemma-2-2b-it-Q5_K_M.gguf" -O ./nobody/model.bin
       - run: cargo test -- --nocapture
         working-directory: ./nobody
