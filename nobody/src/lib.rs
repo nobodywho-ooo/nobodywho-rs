@@ -5,7 +5,7 @@ use godot::prelude::*;
 
 use std::sync::mpsc::{Receiver, Sender};
 
-use crate::model::ModelActor;
+use crate::model::{ModelActor, ModelOutput};
 
 struct NobodyExtension;
 
@@ -56,8 +56,8 @@ struct NobodyPrompt {
     model_node: Option<Gd<NobodyModel>>,
 
     // channels for communicating with ModelActor
-    rx: Receiver<String>,
-    tx: Sender<String>,
+    rx: Receiver<ModelOutput>,
+    tx: Sender<ModelOutput>,
 
     base: Base<Node>,
 }
@@ -74,10 +74,19 @@ impl INode for NobodyPrompt {
         }
     }
 
-    fn physics_process(&mut self, _delta: f64) {
-        if let Ok(token) = self.rx.try_recv() {
-            self.base_mut()
-                .emit_signal("completion_updated".into(), &[Variant::from(token)]);
+    fn process(&mut self, _delta: f64) {
+        match self.rx.try_recv() {
+            Ok(ModelOutput::Token(token)) => {
+                self.base_mut()
+                    .emit_signal("completion_updated".into(), &[Variant::from(token)]);
+            }
+            Ok(ModelOutput::Done) => {
+                self.base_mut()
+                    .emit_signal("completion_finished".into(), &[]);
+            }
+            Err(err) => {
+                godot_error!("{err:?}")
+            }
         }
     }
 }
@@ -104,7 +113,7 @@ impl NobodyPrompt {
                 model_actor.get_completion(prompt, self.tx.clone());
             }
             None => {
-                godot_error!("you must set a model node first");
+                godot_error!("You must set a model node first.");
             }
         }
     }
