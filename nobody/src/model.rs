@@ -79,7 +79,6 @@ impl ModelActor {
 
     pub fn get_chat_response(&self, text: String, tx: Sender<ModelOutput>) {
         if let Some(sender) = &self.sender {
-            println!("HERE!");
             sender
                 .send(ActorMessage::GetChatResponse {
                     text,
@@ -99,11 +98,6 @@ fn get_completion(
     respond_to: &Sender<ModelOutput>,
 ) {
     let tokens_list = model.str_to_token(&prompt, AddBos::Always).unwrap();
-
-    // print the prompt token-by-token
-    for token in &tokens_list {
-        println!("{}", model.token_to_str(*token, Special::Tokenize).unwrap());
-    }
 
     // create a llama_batch
     // we use this object to submit token data for decoding
@@ -230,7 +224,6 @@ mod tests {
         actor.get_completion("Count to five: 1, 2, ".to_string(), tx.clone());
         let mut result: String = "".to_string();
         while let Ok(ModelOutput::Token(s)) = rx.recv() {
-            println!("{}", s);
             result += s.as_str();
         }
         let expected = "3, 4, 5";
