@@ -2,7 +2,10 @@
 
 [ext_resource type="Script" path="res://prompt.gd" id="1_yai4m"]
 
-[node name="Sprite2D" type="NobodyPrompt"]
+[node name="NobodyPrompt" type="NobodyPrompt" node_paths=PackedStringArray("model_node")]
+model_node = NodePath("NobodyModel")
 script = ExtResource("1_yai4m")
+
+[node name="NobodyModel" type="NobodyModel" parent="."]
 
 [connection signal="completion_updated" from="." to="." method="_on_completion_updated"]

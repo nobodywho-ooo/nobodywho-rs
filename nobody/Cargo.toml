@@ -12,3 +12,4 @@ godot = { git = "https://github.com/godot-rust/gdext", branch = "master", featur
     "experimental-threads",
 ] }
 llama-cpp-2 = "0.1.68"
+num_cpus = "1.16.0"
