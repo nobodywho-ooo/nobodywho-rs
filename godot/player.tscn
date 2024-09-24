@@ -1,11 +1,20 @@
-[gd_scene load_steps=2 format=3 uid="uid://breb76ad7m6xn"]
+[gd_scene load_steps=4 format=3 uid="uid://breb76ad7m6xn"]
 
 [ext_resource type="Script" path="res://prompt.gd" id="1_yai4m"]
+[ext_resource type="Texture2D" uid="uid://dnoxc70qheu2v" path="res://icon.svg" id="2_x6wo5"]
+[ext_resource type="Script" path="res://sprite_2d.gd" id="3_bvxrw"]
 
-[node name="NobodyPrompt" type="NobodyPrompt" node_paths=PackedStringArray("model_node")]
-model_node = NodePath("NobodyModel")
-script = ExtResource("1_yai4m")
+[node name="Root" type="Node2D"]
 
 [node name="NobodyModel" type="NobodyModel" parent="."]
 
-[connection signal="completion_updated" from="." to="." method="_on_completion_updated"]
+[node name="NobodyPrompt" type="NobodyPrompt" parent="." node_paths=PackedStringArray("model_node")]
+model_node = NodePath("../NobodyModel")
+script = ExtResource("1_yai4m")
+
+[node name="Sprite2D" type="Sprite2D" parent="."]
+position = Vector2(248, 239)
+texture = ExtResource("2_x6wo5")
+script = ExtResource("3_bvxrw")
+
+[connection signal="completion_updated" from="NobodyPrompt" to="NobodyPrompt" method="_on_completion_updated"]
