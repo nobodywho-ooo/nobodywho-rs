@@ -74,18 +74,24 @@ impl INode for NobodyPrompt {
         }
     }
 
-    fn process(&mut self, _delta: f64) {
+    fn physics_process(&mut self, _delta: f64) {
+        // poll for new output from the model
         match self.rx.try_recv() {
+            // model output another token
             Ok(ModelOutput::Token(token)) => {
                 self.base_mut()
                     .emit_signal("completion_updated".into(), &[Variant::from(token)]);
             }
+            // model is done generating
             Ok(ModelOutput::Done) => {
                 self.base_mut()
                     .emit_signal("completion_finished".into(), &[]);
             }
-            Err(err) => {
-                godot_error!("{err:?}")
+            // no new token, do nothing yet
+            Err(std::sync::mpsc::TryRecvError::Empty) => (),
+            // model no longer exists..
+            Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                godot_error!("Model worker was disconnected.")
             }
         }
     }
