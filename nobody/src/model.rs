@@ -54,10 +54,6 @@ impl ModelActor {
         Self { seed, ..self }
     }
 
-    pub fn with_model_path(self, model_path: String) -> Self {
-        Self { model_path, ..self }
-    }
-
     pub fn run(&mut self) {
         // loads model and starts thread
         // TODO: can we give better errors here?
@@ -147,7 +143,10 @@ fn get_completion(
 
             // is it an end of stream?
             if new_token_id == model.token_eos() {
-                respond_to.send(ModelOutput::Done);
+                // XXX: is there a better way to deal with error here?
+                //      this will error if the other end of the respond_to channel is free'd
+                //      I'm not sure there's much we can do, maybe print a warning?
+                let _ = respond_to.send(ModelOutput::Done);
                 batch.clear();
                 batch.add(new_token_id, n_cur, &[0], true).unwrap();
                 break;
