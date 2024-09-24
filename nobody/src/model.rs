@@ -18,11 +18,11 @@ static LLAMA_BACKEND: LazyLock<LlamaBackend> =
 enum ActorMessage {
     GetCompletion {
         prompt: String,
-        respond_to: Sender<String>,
+        respond_to: Sender<ModelOutput>,
     },
     GetChatResponse {
         text: String,
-        respond_to: Sender<String>,
+        respond_to: Sender<ModelOutput>,
     },
 }
 
@@ -30,6 +30,12 @@ pub struct ModelActor {
     seed: u32,
     model_path: String,
     sender: Option<Sender<ActorMessage>>,
+}
+
+#[derive(Debug)]
+pub enum ModelOutput {
+    Token(String),
+    Done,
 }
 
 impl ModelActor {
@@ -48,10 +54,6 @@ impl ModelActor {
         Self { seed, ..self }
     }
 
-    pub fn with_model_path(self, model_path: String) -> Self {
-        Self { model_path, ..self }
-    }
-
     pub fn run(&mut self) {
         // loads model and starts thread
         // TODO: can we give better errors here?
@@ -62,7 +64,7 @@ impl ModelActor {
         std::thread::spawn(move || model_worker(model_path, seed, receiver));
     }
 
-    pub fn get_completion(&self, prompt: String, tx: Sender<String>) {
+    pub fn get_completion(&self, prompt: String, tx: Sender<ModelOutput>) {
         if let Some(sender) = &(self.sender) {
             sender
                 .send(ActorMessage::GetCompletion {
@@ -75,9 +77,8 @@ impl ModelActor {
         }
     }
 
-    pub fn get_chat_response(&self, text: String, tx: Sender<String>) {
+    pub fn get_chat_response(&self, text: String, tx: Sender<ModelOutput>) {
         if let Some(sender) = &self.sender {
-            println!("HERE!");
             sender
                 .send(ActorMessage::GetChatResponse {
                     text,
@@ -94,14 +95,9 @@ fn get_completion(
     ctx: &mut LlamaContext,
     model: &LlamaModel,
     prompt: &str,
-    respond_to: &Sender<String>,
+    respond_to: &Sender<ModelOutput>,
 ) {
     let tokens_list = model.str_to_token(&prompt, AddBos::Always).unwrap();
-
-    // print the prompt token-by-token
-    for token in &tokens_list {
-        println!("{}", model.token_to_str(*token, Special::Tokenize).unwrap());
-    }
 
     // create a llama_batch
     // we use this object to submit token data for decoding
@@ -141,6 +137,12 @@ fn get_completion(
 
             // is it an end of stream?
             if new_token_id == model.token_eos() {
+                // XXX: is there a better way to deal with error here?
+                //      this will error if the other end of the respond_to channel is free'd
+                //      I'm not sure there's much we can do, maybe print a warning?
+                let _ = respond_to.send(ModelOutput::Done);
+                batch.clear();
+                batch.add(new_token_id, n_cur, &[0], true).unwrap();
                 break;
             }
 
@@ -153,8 +155,8 @@ fn get_completion(
             let _decode_result =
                 utf8decoder.decode_to_string(&output_bytes, &mut output_string, false);
 
-            // sendb new token string back to user
-            respond_to.send(output_string).unwrap();
+            // send new token string back to user
+            respond_to.send(ModelOutput::Token(output_string)).unwrap();
 
             // prepare batch or the next decode
             batch.clear();
@@ -220,13 +222,12 @@ mod tests {
         actor.run();
         let (tx, rx) = std::sync::mpsc::channel();
         actor.get_completion("Count to five: 1, 2, ".to_string(), tx.clone());
-        assert_eq!(rx.recv(), Ok("3".to_string()));
-        assert_eq!(rx.recv(), Ok(",".to_string()));
-        assert_eq!(rx.recv(), Ok(" ".to_string()));
-        assert_eq!(rx.recv(), Ok("4".to_string()));
-        assert_eq!(rx.recv(), Ok(",".to_string()));
-        assert_eq!(rx.recv(), Ok(" ".to_string()));
-        assert_eq!(rx.recv(), Ok("5".to_string()));
+        let mut result: String = "".to_string();
+        while let Ok(ModelOutput::Token(s)) = rx.recv() {
+            result += s.as_str();
+        }
+        let expected = "3, 4, 5";
+        assert_eq!(&result[..expected.len()], expected);
     }
 
     #[test]
@@ -235,13 +236,11 @@ mod tests {
         actor.run();
         let (tx, rx) = std::sync::mpsc::channel();
         actor.get_chat_response("I need you to respond with just the text 'Hello, world!' literally, without the quotes.".to_string(), tx);
-        let mut response = "".to_string();
-        while let Ok(str) = rx.recv() {
-            println!("Got: {}", &str);
-            response += str.as_str();
+        let mut result: String = "".to_string();
+        while let Ok(ModelOutput::Token(s)) = rx.recv() {
+            result += s.as_str();
         }
-        dbg!(&response);
         let expected = "Hello, world!";
-        assert_eq!(&response[..expected.len()], expected);
+        assert_eq!(&result[..expected.len()], expected);
     }
 }
