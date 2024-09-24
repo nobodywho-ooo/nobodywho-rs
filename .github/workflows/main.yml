@@ -32,19 +32,13 @@ jobs:
     runs-on: Linux
     strategy:
       fail-fast: false
-      matrix:
-        target: 
-          - "x86_64-pc-windows-gnu"
-          - "x86_64-unknown-linux-gnu"
-        toolchain:
-          - "stable"
     steps:
       - uses: actions/checkout@v4
       - run: |
           curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
           . "$HOME/.cargo/env"
-          rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
-          rustup target add ${{ matrix.target }}
+          rustup update stable && rustup default stable
+          rustup target add x86_64-unknown-linux-gnu
           echo "$HOME/.cargo/bin" >> $GITHUB_PATH
       - run: |
           sudo apt-get update
