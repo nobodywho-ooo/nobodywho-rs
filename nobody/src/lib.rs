@@ -1,11 +1,20 @@
-mod model;
-
 use godot::classes::INode;
 use godot::prelude::*;
-
+use llama_cpp_2::context::params::LlamaContextParams;
+use llama_cpp_2::context::LlamaContext;
+use llama_cpp_2::llama_backend::LlamaBackend;
+use llama_cpp_2::llama_batch::LlamaBatch;
+use llama_cpp_2::model::params::LlamaModelParams;
+use llama_cpp_2::model::LlamaModel;
+use llama_cpp_2::model::{AddBos, Special};
+use llama_cpp_2::token::data_array::LlamaTokenDataArray;
+use std::num::NonZeroU32;
+use std::pin::pin;
 use std::sync::mpsc::{Receiver, Sender};
+use std::sync::{Arc, LazyLock};
 
-use crate::model::ModelActor;
+static LLAMA_BACKEND: LazyLock<LlamaBackend> =
+    LazyLock::new(|| LlamaBackend::init().expect("Failed to initialize llama backend"));
 
 struct NobodyExtension;
 
@@ -21,31 +30,31 @@ struct NobodyModel {
     #[export]
     seed: u32,
 
-    model_actor: Option<ModelActor>,
+    // TODO: Should be a Option
+    model: Arc<LlamaModel>,
 }
 
 #[godot_api]
 impl INode for NobodyModel {
     fn init(_base: Base<Node>) -> Self {
         // default values to show in godot editor
-        let model_path = "model.bin".into();
-        let seed = 1234;
-        Self {
-            model_path,
-            seed,
-            model_actor: None,
-        }
-    }
-}
+        let model_path: String = "model.bin".into();
 
-#[godot_api]
-impl NobodyModel {
-    #[func]
-    fn run(&mut self) {
-        let mut model_actor =
-            ModelActor::from_model_path(self.model_path.to_string()).with_seed(self.seed);
-        model_actor.run();
-        self.model_actor = Some(model_actor);
+        let seed = 1234;
+
+        let model_params = LlamaModelParams::default().with_n_gpu_layers(1000);
+
+        let model_params = pin!(model_params);
+
+        let model = Arc::new(
+            LlamaModel::load_from_file(&LLAMA_BACKEND, model_path.clone(), &model_params).unwrap(),
+        );
+
+        Self {
+            model_path: model_path.into(),
+            seed,
+            model,
+        }
     }
 }
 
@@ -55,9 +64,8 @@ struct NobodyPrompt {
     #[export]
     model_node: Option<Gd<NobodyModel>>,
 
-    // channels for communicating with ModelActor
-    rx: Receiver<String>,
-    tx: Sender<String>,
+    rx: Option<Receiver<String>>,
+    tx: Option<Sender<String>>,
 
     base: Base<Node>,
 }
@@ -65,19 +73,20 @@ struct NobodyPrompt {
 #[godot_api]
 impl INode for NobodyPrompt {
     fn init(base: Base<Node>) -> Self {
-        let (tx, rx) = std::sync::mpsc::channel();
         Self {
             model_node: None,
-            rx,
-            tx,
+            rx: None,
+            tx: None,
             base,
         }
     }
 
     fn physics_process(&mut self, _delta: f64) {
-        if let Ok(token) = self.rx.try_recv() {
-            self.base_mut()
-                .emit_signal("completion_updated".into(), &[Variant::from(token)]);
+        if let Some(rx) = self.rx.as_ref() {
+            if let Ok(token) = rx.try_recv() {
+                self.base_mut()
+                    .emit_signal("completion_updated".into(), &[Variant::from(token)]);
+            }
         }
     }
 }
@@ -85,27 +94,100 @@ impl INode for NobodyPrompt {
 #[godot_api]
 impl NobodyPrompt {
     #[func]
-    fn prompt(&mut self, prompt: String) {
-        match self.model_node {
-            Some(ref mut gd_model_node) => {
-                let mut nobody_model: GdMut<NobodyModel> = gd_model_node.bind_mut();
-                let model_actor = match &nobody_model.model_actor {
-                    Some(model_actor) => model_actor,
-                    None => {
-                        godot_warn!("Model was not loaded yet. Loading now... Call the .run() method on NobodyModel to control when to load the model.");
-                        nobody_model.run();
-                        if let Some(model_actor) = &nobody_model.model_actor {
-                            model_actor
-                        } else {
-                            panic!("Unexpected: nobody_model.model_actor is still None after calling run()");
-                        }
+    fn run(&mut self) {
+        if let Some(gd_model_node) = self.model_node.as_mut() {
+            let nobody_model: GdRef<NobodyModel> = gd_model_node.bind();
+
+            let model = nobody_model.model.clone();
+
+            let (tx1, rx1) = std::sync::mpsc::channel::<String>();
+            let (tx2, rx2) = std::sync::mpsc::channel::<String>();
+
+            self.tx = Some(tx1);
+            self.rx = Some(rx2);
+
+            std::thread::spawn(move || {
+                let ctx_params = LlamaContextParams::default()
+                    .with_n_ctx(NonZeroU32::new(2048))
+                    .with_seed(1234);
+
+                let mut ctx = model.new_context(&LLAMA_BACKEND, ctx_params).unwrap();
+
+                while let Ok(prompt) = rx1.recv() {
+                    let tokens_list = model.str_to_token(&prompt, AddBos::Always).unwrap();
+
+                    let mut batch = LlamaBatch::new(ctx.n_ctx() as usize, 1);
+
+                    // put tokens in the batch
+                    let last_index: i32 = (tokens_list.len() - 1) as i32;
+                    for (i, token) in (0_i32..).zip(tokens_list.into_iter()) {
+                        // llama_decode will output logits only for the last token of the prompt
+                        let is_last = i == last_index;
+                        batch.add(token, i, &[0], is_last).unwrap();
                     }
-                };
-                model_actor.get_completion(prompt, self.tx.clone());
-            }
-            None => {
-                godot_error!("you must set a model node first");
-            }
+
+                    // llm go brrrr
+                    ctx.decode(&mut batch).unwrap();
+
+                    // main loop
+                    let mut n_cur = batch.n_tokens();
+
+                    // The `Decoder`
+                    let mut utf8decoder = encoding_rs::UTF_8.new_decoder();
+
+                    loop {
+                        // sample the next token
+                        {
+                            let candidates = ctx.candidates_ith(batch.n_tokens() - 1);
+
+                            let candidates_p = LlamaTokenDataArray::from_iter(candidates, false);
+
+                            // sample the most likely token
+                            // TODO: parameterize sampler
+                            let new_token_id = ctx.sample_token_greedy(candidates_p);
+
+                            // is it an end of stream?
+                            if new_token_id == model.token_eos() {
+                                break;
+                            }
+
+                            // convert tokens to String
+                            let output_bytes = model
+                                .token_to_bytes(new_token_id, Special::Tokenize)
+                                .unwrap();
+                            // use `Decoder.decode_to_string()` to avoid the intermediate buffer
+                            let mut output_string = String::with_capacity(32);
+                            let _decode_result = utf8decoder.decode_to_string(
+                                &output_bytes,
+                                &mut output_string,
+                                false,
+                            );
+
+                            // sendb new token string back to user
+                            tx2.send(output_string).unwrap();
+
+                            // prepare batch or the next decode
+                            batch.clear();
+                            batch.add(new_token_id, n_cur, &[0], true).unwrap();
+                        }
+
+                        n_cur += 1;
+
+                        ctx.decode(&mut batch).unwrap();
+                    }
+                }
+            });
+        } else {
+            godot_error!("Model node not set");
+        }
+    }
+
+    #[func]
+    fn prompt(&mut self, prompt: String) {
+        if let Some(tx) = self.tx.as_ref() {
+            tx.send(prompt).unwrap();
+        } else {
+            godot_error!("Model not initialized. Call `run` first");
         }
     }
 
