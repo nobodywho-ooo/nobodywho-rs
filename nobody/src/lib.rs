@@ -31,7 +31,7 @@ struct NobodyModel {
     seed: u32,
 
     // TODO: Should be a Option
-    model: Arc<LlamaModel>,
+    model: Option<Arc<LlamaModel>>,
 }
 
 #[godot_api]
@@ -42,19 +42,20 @@ impl INode for NobodyModel {
 
         let seed = 1234;
 
-        let model_params = LlamaModelParams::default().with_n_gpu_layers(1000);
-
-        let model_params = pin!(model_params);
-
-        let model = Arc::new(
-            LlamaModel::load_from_file(&LLAMA_BACKEND, model_path.clone(), &model_params).unwrap(),
-        );
-
         Self {
             model_path: model_path.into(),
+            model: None,
             seed,
-            model,
         }
+    }
+
+    fn ready(&mut self) {
+        let model_params = LlamaModelParams::default().with_n_gpu_layers(1000);
+        let model_params = pin!(model_params);
+        let model_path = self.model_path.to_string();
+        self.model = Some(Arc::new(
+            LlamaModel::load_from_file(&LLAMA_BACKEND, model_path, &model_params).unwrap(),
+        ));
     }
 }
 
@@ -98,17 +99,17 @@ impl NobodyPrompt {
         if let Some(gd_model_node) = self.model_node.as_mut() {
             let nobody_model: GdRef<NobodyModel> = gd_model_node.bind();
 
-            let model = nobody_model.model.clone();
+            if let Some(model) = nobody_model.model.clone() {
+                let (prompt_tx, prompt_rx) = std::sync::mpsc::channel::<String>();
+                let (completion_tx, completion_rx) = std::sync::mpsc::channel::<String>();
 
-            let (prompt_tx, prompt_rx) = std::sync::mpsc::channel::<String>();
-            let (completion_tx, completion_rx) = std::sync::mpsc::channel::<String>();
+                self.tx = Some(prompt_tx);
+                self.rx = Some(completion_rx);
 
-            self.tx = Some(prompt_tx);
-            self.rx = Some(completion_rx);
-
-            std::thread::spawn(move || {
-                run_worker(model, prompt_rx, completion_tx);
-            });
+                std::thread::spawn(move || {
+                    run_worker(model, prompt_rx, completion_tx);
+                });
+            }
         } else {
             godot_error!("Model node not set");
         }
