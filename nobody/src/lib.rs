@@ -81,7 +81,7 @@ impl INode for NobodyPrompt {
         }
     }
 
-    fn physics_process(&mut self, _delta: f64) {
+    fn process(&mut self, _delta: f64) {
         if let Some(rx) = self.rx.as_ref() {
             if let Ok(token) = rx.try_recv() {
                 self.base_mut()
@@ -100,82 +100,14 @@ impl NobodyPrompt {
 
             let model = nobody_model.model.clone();
 
-            let (tx1, rx1) = std::sync::mpsc::channel::<String>();
-            let (tx2, rx2) = std::sync::mpsc::channel::<String>();
+            let (prompt_tx, prompt_rx) = std::sync::mpsc::channel::<String>();
+            let (completion_tx, completion_rx) = std::sync::mpsc::channel::<String>();
 
-            self.tx = Some(tx1);
-            self.rx = Some(rx2);
+            self.tx = Some(prompt_tx);
+            self.rx = Some(completion_rx);
 
             std::thread::spawn(move || {
-                let ctx_params = LlamaContextParams::default()
-                    .with_n_ctx(NonZeroU32::new(2048))
-                    .with_seed(1234);
-
-                let mut ctx = model.new_context(&LLAMA_BACKEND, ctx_params).unwrap();
-
-                while let Ok(prompt) = rx1.recv() {
-                    let tokens_list = model.str_to_token(&prompt, AddBos::Always).unwrap();
-
-                    let mut batch = LlamaBatch::new(ctx.n_ctx() as usize, 1);
-
-                    // put tokens in the batch
-                    let last_index: i32 = (tokens_list.len() - 1) as i32;
-                    for (i, token) in (0_i32..).zip(tokens_list.into_iter()) {
-                        // llama_decode will output logits only for the last token of the prompt
-                        let is_last = i == last_index;
-                        batch.add(token, i, &[0], is_last).unwrap();
-                    }
-
-                    // llm go brrrr
-                    ctx.decode(&mut batch).unwrap();
-
-                    // main loop
-                    let mut n_cur = batch.n_tokens();
-
-                    // The `Decoder`
-                    let mut utf8decoder = encoding_rs::UTF_8.new_decoder();
-
-                    loop {
-                        // sample the next token
-                        {
-                            let candidates = ctx.candidates_ith(batch.n_tokens() - 1);
-
-                            let candidates_p = LlamaTokenDataArray::from_iter(candidates, false);
-
-                            // sample the most likely token
-                            // TODO: parameterize sampler
-                            let new_token_id = ctx.sample_token_greedy(candidates_p);
-
-                            // is it an end of stream?
-                            if new_token_id == model.token_eos() {
-                                break;
-                            }
-
-                            // convert tokens to String
-                            let output_bytes = model
-                                .token_to_bytes(new_token_id, Special::Tokenize)
-                                .unwrap();
-                            // use `Decoder.decode_to_string()` to avoid the intermediate buffer
-                            let mut output_string = String::with_capacity(32);
-                            let _decode_result = utf8decoder.decode_to_string(
-                                &output_bytes,
-                                &mut output_string,
-                                false,
-                            );
-
-                            // sendb new token string back to user
-                            tx2.send(output_string).unwrap();
-
-                            // prepare batch or the next decode
-                            batch.clear();
-                            batch.add(new_token_id, n_cur, &[0], true).unwrap();
-                        }
-
-                        n_cur += 1;
-
-                        ctx.decode(&mut batch).unwrap();
-                    }
-                }
+                run_worker(model, prompt_rx, completion_tx);
             });
         } else {
             godot_error!("Model node not set");
@@ -196,4 +128,73 @@ impl NobodyPrompt {
 
     #[signal]
     fn completion_finished();
+}
+
+fn run_worker(model: Arc<LlamaModel>, prompt_rx: Receiver<String>, completion_tx: Sender<String>) {
+    let ctx_params = LlamaContextParams::default()
+        .with_n_ctx(NonZeroU32::new(2048))
+        .with_seed(1234);
+
+    let mut ctx = model.new_context(&LLAMA_BACKEND, ctx_params).unwrap();
+
+    while let Ok(prompt) = prompt_rx.recv() {
+        let tokens_list = model.str_to_token(&prompt, AddBos::Always).unwrap();
+
+        let mut batch = LlamaBatch::new(ctx.n_ctx() as usize, 1);
+
+        // put tokens in the batch
+        let last_index: i32 = (tokens_list.len() - 1) as i32;
+        for (i, token) in (0_i32..).zip(tokens_list.into_iter()) {
+            // llama_decode will output logits only for the last token of the prompt
+            let is_last = i == last_index;
+            batch.add(token, i, &[0], is_last).unwrap();
+        }
+
+        // llm go brrrr
+        ctx.decode(&mut batch).unwrap();
+
+        // main loop
+        let mut n_cur = batch.n_tokens();
+
+        // The `Decoder`
+        let mut utf8decoder = encoding_rs::UTF_8.new_decoder();
+
+        loop {
+            // sample the next token
+            {
+                let candidates = ctx.candidates_ith(batch.n_tokens() - 1);
+
+                let candidates_p = LlamaTokenDataArray::from_iter(candidates, false);
+
+                // sample the most likely token
+                // TODO: parameterize sampler
+                let new_token_id = ctx.sample_token_greedy(candidates_p);
+
+                // is it an end of stream?
+                if new_token_id == model.token_eos() {
+                    break;
+                }
+
+                // convert tokens to String
+                let output_bytes = model
+                    .token_to_bytes(new_token_id, Special::Tokenize)
+                    .unwrap();
+                // use `Decoder.decode_to_string()` to avoid the intermediate buffer
+                let mut output_string = String::with_capacity(32);
+                let _decode_result =
+                    utf8decoder.decode_to_string(&output_bytes, &mut output_string, false);
+
+                // sendb new token string back to user
+                completion_tx.send(output_string).unwrap();
+
+                // prepare batch or the next decode
+                batch.clear();
+                batch.add(new_token_id, n_cur, &[0], true).unwrap();
+            }
+
+            n_cur += 1;
+
+            ctx.decode(&mut batch).unwrap();
+        }
+    }
 }
