@@ -53,6 +53,7 @@ struct NobodyPrompt {
 
     completion_rx: Option<Receiver<llm::LLMOutput>>,
     prompt_tx: Option<Sender<String>>,
+
     base: Base<Node>,
 }
 
