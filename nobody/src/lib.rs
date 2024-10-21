@@ -1,11 +1,11 @@
-mod model;
+mod llm;
 
 use godot::classes::INode;
 use godot::prelude::*;
-
+use llama_cpp_2::model::LlamaModel;
+use llm::run_worker;
 use std::sync::mpsc::{Receiver, Sender};
-
-use crate::model::{ModelActor, ModelOutput};
+use std::sync::Arc;
 
 struct NobodyExtension;
 
@@ -21,31 +21,27 @@ struct NobodyModel {
     #[export]
     seed: u32,
 
-    model_actor: Option<ModelActor>,
+    model: Option<Arc<LlamaModel>>,
 }
 
 #[godot_api]
 impl INode for NobodyModel {
     fn init(_base: Base<Node>) -> Self {
         // default values to show in godot editor
-        let model_path = "model.bin".into();
+        let model_path: String = "model.bin".into();
+
         let seed = 1234;
+
         Self {
-            model_path,
+            model_path: model_path.into(),
+            model: None,
             seed,
-            model_actor: None,
         }
     }
-}
 
-#[godot_api]
-impl NobodyModel {
-    #[func]
-    fn run(&mut self) {
-        let mut model_actor =
-            ModelActor::from_model_path(self.model_path.to_string()).with_seed(self.seed);
-        model_actor.run();
-        self.model_actor = Some(model_actor);
+    fn ready(&mut self) {
+        let model_path_string: String = self.model_path.clone().into();
+        self.model = Some(llm::get_model(model_path_string.as_str()));
     }
 }
 
@@ -55,9 +51,8 @@ struct NobodyPrompt {
     #[export]
     model_node: Option<Gd<NobodyModel>>,
 
-    // channels for communicating with ModelActor
-    rx: Receiver<ModelOutput>,
-    tx: Sender<ModelOutput>,
+    completion_rx: Option<Receiver<llm::LLMOutput>>,
+    prompt_tx: Option<Sender<String>>,
 
     base: Base<Node>,
 }
@@ -65,33 +60,33 @@ struct NobodyPrompt {
 #[godot_api]
 impl INode for NobodyPrompt {
     fn init(base: Base<Node>) -> Self {
-        let (tx, rx) = std::sync::mpsc::channel();
         Self {
             model_node: None,
-            rx,
-            tx,
+            completion_rx: None,
+            prompt_tx: None,
             base,
         }
     }
 
     fn physics_process(&mut self, _delta: f64) {
-        // poll for new output from the model
-        match self.rx.try_recv() {
-            // model output another token
-            Ok(ModelOutput::Token(token)) => {
-                self.base_mut()
-                    .emit_signal("completion_updated".into(), &[Variant::from(token)]);
-            }
-            // model is done generating
-            Ok(ModelOutput::Done) => {
-                self.base_mut()
-                    .emit_signal("completion_finished".into(), &[]);
-            }
-            // no new token, do nothing yet
-            Err(std::sync::mpsc::TryRecvError::Empty) => (),
-            // model no longer exists..
-            Err(std::sync::mpsc::TryRecvError::Disconnected) => {
-                godot_error!("Model worker was disconnected.")
+        loop {
+            if let Some(rx) = self.completion_rx.as_ref() {
+                match rx.try_recv() {
+                    Ok(llm::LLMOutput::Token(token)) => {
+                        self.base_mut()
+                            .emit_signal("completion_updated".into(), &[Variant::from(token)]);
+                    }
+                    Ok(llm::LLMOutput::Done) => {
+                        self.base_mut()
+                            .emit_signal("completion_finished".into(), &[]);
+                    }
+                    Err(std::sync::mpsc::TryRecvError::Empty) => {
+                        break;
+                    }
+                    Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                        godot_error!("Unexpected: Model channel disconnected");
+                    }
+                }
             }
         }
     }
@@ -100,27 +95,34 @@ impl INode for NobodyPrompt {
 #[godot_api]
 impl NobodyPrompt {
     #[func]
+    fn run(&mut self) {
+        if let Some(gd_model_node) = self.model_node.as_mut() {
+            let nobody_model: GdRef<NobodyModel> = gd_model_node.bind();
+            if let Some(model) = nobody_model.model.clone() {
+                let (prompt_tx, prompt_rx) = std::sync::mpsc::channel::<String>();
+                let (completion_tx, completion_rx) = std::sync::mpsc::channel::<llm::LLMOutput>();
+
+                self.prompt_tx = Some(prompt_tx);
+                self.completion_rx = Some(completion_rx);
+
+                let seed = nobody_model.seed;
+                std::thread::spawn(move || {
+                    run_worker(model, prompt_rx, completion_tx, seed);
+                });
+            } else {
+                godot_error!("Unexpected: Model node is not ready yet.");
+            }
+        } else {
+            godot_error!("Model node not set");
+        }
+    }
+
+    #[func]
     fn prompt(&mut self, prompt: String) {
-        match self.model_node {
-            Some(ref mut gd_model_node) => {
-                let mut nobody_model: GdMut<NobodyModel> = gd_model_node.bind_mut();
-                let model_actor = match &nobody_model.model_actor {
-                    Some(model_actor) => model_actor,
-                    None => {
-                        godot_warn!("Model was not loaded yet. Loading now... Call the .run() method on NobodyModel to control when to load the model.");
-                        nobody_model.run();
-                        if let Some(model_actor) = &nobody_model.model_actor {
-                            model_actor
-                        } else {
-                            panic!("Unexpected: nobody_model.model_actor is still None after calling run()");
-                        }
-                    }
-                };
-                model_actor.get_completion(prompt, self.tx.clone());
-            }
-            None => {
-                godot_error!("You must set a model node first.");
-            }
+        if let Some(tx) = self.prompt_tx.as_ref() {
+            tx.send(prompt).unwrap();
+        } else {
+            godot_error!("Model not initialized. Call `run` first");
         }
     }
 
