@@ -11,7 +11,5 @@ encoding_rs = "0.8.34"
 godot = { git = "https://github.com/godot-rust/gdext", branch = "master", features = [
     "experimental-threads",
 ] }
-# llama-cpp-2 = "0.1.82"
-# llama-cpp-2 = { path = "../../../llama-cpp-rs/llama-cpp-2" }
-llama-cpp-2 = { git = "https://github.com/AsbjornOlling/llama-cpp-rs.git", branch = "fix-build-on-nixos" }
+llama-cpp-2 = "0.1.83"
 num_cpus = "1.16.0"

@@ -1,11 +1,11 @@
-{ rustPlatform, libclang, llvmPackages_12, stdenv, lib, cmake }:
+{ rustPlatform, libclang, llvmPackages_12, stdenv, lib, cmake, vulkan-headers, vulkan-loader, shaderc }:
 
 
 rustPlatform.buildRustPackage {
   pname = "nobody";
   version = "0.0.0";
   src = ./.;
-  nativeBuildInputs = [ llvmPackages_12.bintools cmake ];
+  nativeBuildInputs = [ llvmPackages_12.bintools cmake vulkan-headers vulkan-loader shaderc ];
   cargoLock = {
     lockFile = ./Cargo.lock;
     outputHashes = {
