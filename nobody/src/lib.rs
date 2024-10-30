@@ -195,13 +195,17 @@ impl NobodyWhoPromptChat {
 
     #[func]
     fn say(&mut self, message: String) {
-        let say_result = || {
+        // TODO: also send system prompt on first message
+
+        // simple closure that returns Err(String) if something fails
+        let say_result = || -> Result<(), String> {
             let tx: &Sender<String> = self.query_tx.as_ref().ok_or(
                 "Channel not initialized. Remember to call run() before talking to character."
                     .to_string(),
             )?;
             let gd_model_node = self.model_node.as_mut().ok_or(
-                "No model node provided. Remember to set provide a model node.".to_string(),
+                "No model node provided. Remember to set a model node on NobodyWhoPromptChat."
+                    .to_string(),
             )?;
             let nobody_model: GdRef<NobodyWhoModel> = gd_model_node.bind();
             let model: Arc<LlamaModel> = nobody_model
@@ -214,6 +218,7 @@ impl NobodyWhoPromptChat {
             Ok::<(), String>(())
         };
 
+        // run it and show the error in godot if it fails
         if let Err(msg) = say_result() {
             godot_error!("Error sending chat message to model worker: {msg}");
         }
