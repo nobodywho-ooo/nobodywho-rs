@@ -29,7 +29,6 @@ impl INode for NobodyModel {
     fn init(_base: Base<Node>) -> Self {
         // default values to show in godot editor
         let model_path: String = "model.bin".into();
-
         let seed = 1234;
 
         Self {
@@ -69,6 +68,7 @@ impl INode for NobodyPrompt {
     }
 
     fn physics_process(&mut self, _delta: f64) {
+        // checks for new tokens from worker thread and emits them as a signal
         loop {
             if let Some(rx) = self.completion_rx.as_ref() {
                 match rx.try_recv() {
@@ -99,12 +99,13 @@ impl NobodyPrompt {
         if let Some(gd_model_node) = self.model_node.as_mut() {
             let nobody_model: GdRef<NobodyModel> = gd_model_node.bind();
             if let Some(model) = nobody_model.model.clone() {
+                // create channels for communicating with worker thread
                 let (prompt_tx, prompt_rx) = std::sync::mpsc::channel::<String>();
                 let (completion_tx, completion_rx) = std::sync::mpsc::channel::<llm::LLMOutput>();
-
                 self.prompt_tx = Some(prompt_tx);
                 self.completion_rx = Some(completion_rx);
 
+                // start worker thread
                 let seed = nobody_model.seed;
                 std::thread::spawn(move || {
                     run_worker(model, prompt_rx, completion_tx, seed);
