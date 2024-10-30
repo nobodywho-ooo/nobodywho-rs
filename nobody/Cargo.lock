@@ -42,9 +42,9 @@ checksum = "b048fb63fd8b5923fc5aa7b340d8e156aec7ec02f0c78fa8a6ddc2613f6f71de"
 
 [[package]]
 name = "cc"
-version = "1.1.15"
+version = "1.1.31"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "57b6a275aa2903740dc87da01c62040406b8812552e97129a63ea8850a17c6e6"
+checksum = "c2e7962b54006dcfcc61cb72735f4d89bb97061dd6a7ed882ec6b8ee53714c6f"
 dependencies = [
  "jobserver",
  "libc",
@@ -75,6 +75,15 @@ dependencies = [
  "glob",
  "libc",
  "libloading",
+]
+
+[[package]]
+name = "cmake"
+version = "0.1.51"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fb1e43aa7fd152b1f968787f7dbcdeb306d1867ff373c69955211876c053f91a"
+dependencies = [
+ "cc",
 ]
 
 [[package]]
@@ -307,9 +316,8 @@ checksum = "78b3ae25bc7c8c38cec158d1f2757ee79e9b3740fbc7ccf0e59e4b08d793fa89"
 
 [[package]]
 name = "llama-cpp-2"
-version = "0.1.69"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "19da07b715c3827d4389dacff2bb68c2d2feac09ad5ebda7106fd6b51ec3bf60"
+version = "0.1.83"
+source = "git+https://github.com/AsbjornOlling/llama-cpp-rs.git?branch=fix-build-on-nixos#d9475ccc60813d16b704febe433e784cf46e5b75"
 dependencies = [
  "enumflags2",
  "llama-cpp-sys-2",
@@ -319,13 +327,13 @@ dependencies = [
 
 [[package]]
 name = "llama-cpp-sys-2"
-version = "0.1.69"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c796aa0b6789b403a24ee987f4f2c5cd1caa6b8519879e3cebefb03d39f06290"
+version = "0.1.83"
+source = "git+https://github.com/AsbjornOlling/llama-cpp-rs.git?branch=fix-build-on-nixos#d9475ccc60813d16b704febe433e784cf46e5b75"
 dependencies = [
  "bindgen",
  "cc",
- "once_cell",
+ "cmake",
+ "glob",
 ]
 
 [[package]]

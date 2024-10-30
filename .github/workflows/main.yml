@@ -23,7 +23,7 @@ jobs:
           echo "$HOME/.cargo/bin" >> $GITHUB_PATH
       - run: |
           sudo apt-get update
-          sudo apt-get install -y libclang-dev
+          sudo apt-get install -y libclang-dev cmake
 
       - run: cargo build --verbose
         working-directory: ./nobody
@@ -42,7 +42,7 @@ jobs:
           echo "$HOME/.cargo/bin" >> $GITHUB_PATH
       - run: |
           sudo apt-get update
-          sudo apt-get install -y libclang-dev
+          sudo apt-get install -y libclang-dev cmake
 
       - run: wget "https://huggingface.co/bartowski/gemma-2-2b-it-GGUF/resolve/main/gemma-2-2b-it-Q5_K_M.gguf" -O ./nobody/model.bin
       - run: cargo test -- --nocapture
