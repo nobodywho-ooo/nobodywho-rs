@@ -3,7 +3,7 @@ extends NobodyPrompt
 
 # Called when the node enters the scene tree for the first time.
 func _ready():
-	self.model_node.run()
+	self.run()
 	prompt("Hello, my name is")
 	pass # Replace with function body.
 
