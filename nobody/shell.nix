@@ -4,6 +4,7 @@ pkgs.mkShell {
   packages = [
     pkgs.vulkan-headers
     pkgs.cmake
+    pkgs.clang
     pkgs.rustup
   ];
 }
