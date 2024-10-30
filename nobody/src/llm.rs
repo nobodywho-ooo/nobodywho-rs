@@ -6,6 +6,7 @@ use llama_cpp_2::context::params::LlamaContextParams;
 use llama_cpp_2::llama_backend::LlamaBackend;
 use llama_cpp_2::llama_batch::LlamaBatch;
 use llama_cpp_2::model::params::LlamaModelParams;
+use llama_cpp_2::model::LlamaChatMessage;
 use llama_cpp_2::model::LlamaModel;
 use llama_cpp_2::model::{AddBos, Special};
 use llama_cpp_2::token::data_array::LlamaTokenDataArray;
@@ -23,6 +24,16 @@ pub fn get_model(model_path: &str) -> Arc<LlamaModel> {
     let model_params = LlamaModelParams::default().with_n_gpu_layers(1000);
     let model_params = pin!(model_params);
     Arc::new(LlamaModel::load_from_file(&LLAMA_BACKEND, model_path, &model_params).unwrap())
+}
+
+pub fn send_chat(
+    model: Arc<LlamaModel>,
+    query_tx: &Sender<String>,
+    chat: Vec<LlamaChatMessage>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let prompt = model.apply_chat_template(None, chat, true)?;
+    query_tx.send(prompt)?;
+    Ok(())
 }
 
 pub fn run_worker(
