@@ -11,7 +11,6 @@ rustPlatform.buildRustPackage {
     outputHashes = {
       "gdextension-api-0.2.0" = "sha256-kIkOMwbO63pnmwG3nyM0gMtWhCKSMqz6fmd2nQ22wHg=";
       "godot-0.1.3" = "sha256-T4HVbQ707obITx2dYAO8UYDM9Dvk6LMn6G3Ue8M1KqU=";
-      "llama-cpp-2-0.1.83" = "sha256-ef1ipdFazKOWVwJ8z3komnYJsQ8T76A3pPo51X1ahK8=";
     };
   };
   env.LIBCLANG_PATH = "${libclang.lib}/lib/libclang.so";
