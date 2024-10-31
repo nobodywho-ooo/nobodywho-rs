@@ -104,7 +104,7 @@ pub fn run_worker(
                 let _decode_result =
                     utf8decoder.decode_to_string(&output_bytes, &mut output_string, false);
 
-                // sendb new token string back to user
+                // send new token string back to user
                 completion_tx.send(LLMOutput::Token(output_string)).unwrap();
 
                 // prepare batch or the next decode
