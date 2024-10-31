@@ -42,54 +42,6 @@ impl INode for NobodyWhoModel {
     }
 }
 
-#[derive(GodotClass)]
-#[class(base=Node)]
-struct NobodyWhoPromptCompletion {
-    #[export]
-    model_node: Option<Gd<NobodyWhoModel>>,
-
-    completion_rx: Option<Receiver<llm::LLMOutput>>,
-    prompt_tx: Option<Sender<String>>,
-
-    base: Base<Node>,
-}
-
-#[godot_api]
-impl INode for NobodyWhoPromptCompletion {
-    fn init(base: Base<Node>) -> Self {
-        Self {
-            model_node: None,
-            completion_rx: None,
-            prompt_tx: None,
-            base,
-        }
-    }
-
-    fn physics_process(&mut self, _delta: f64) {
-        // checks for new tokens from worker thread and emits them as a signal
-        loop {
-            if let Some(rx) = self.completion_rx.as_ref() {
-                match rx.try_recv() {
-                    Ok(llm::LLMOutput::Token(token)) => {
-                        self.base_mut()
-                            .emit_signal("completion_updated".into(), &[Variant::from(token)]);
-                    }
-                    Ok(llm::LLMOutput::Done) => {
-                        self.base_mut()
-                            .emit_signal("completion_finished".into(), &[]);
-                    }
-                    Err(std::sync::mpsc::TryRecvError::Empty) => {
-                        break;
-                    }
-                    Err(std::sync::mpsc::TryRecvError::Disconnected) => {
-                        godot_error!("Unexpected: Model channel disconnected");
-                    }
-                }
-            }
-        }
-    }
-}
-
 macro_rules! run_model {
     ($self:ident) => {
         {
@@ -132,6 +84,59 @@ macro_rules! send_text {
             godot_error!("Model not initialized. Call `run` first");
         }
     }
+}
+
+macro_rules! emit_tokens {
+    ($self:ident) => {
+        {
+            loop {
+                if let Some(rx) = $self.completion_rx.as_ref() {
+                    match rx.try_recv() {
+                        Ok(llm::LLMOutput::Token(token)) => {
+                            $self.base_mut()
+                                .emit_signal("completion_updated".into(), &[Variant::from(token)]);
+                        }
+                        Ok(llm::LLMOutput::Done) => {
+                            $self.base_mut()
+                                .emit_signal("completion_finished".into(), &[]);
+                        }
+                        Err(std::sync::mpsc::TryRecvError::Empty) => {
+                            break;
+                        }
+                        Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                            godot_error!("Unexpected: Model channel disconnected");
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[derive(GodotClass)]
+#[class(base=Node)]
+struct NobodyWhoPromptCompletion {
+    #[export]
+    model_node: Option<Gd<NobodyWhoModel>>,
+
+    completion_rx: Option<Receiver<llm::LLMOutput>>,
+    prompt_tx: Option<Sender<String>>,
+
+    base: Base<Node>,
+}
+
+#[godot_api]
+impl INode for NobodyWhoPromptCompletion {
+    fn init(base: Base<Node>) -> Self {
+        Self {
+            model_node: None,
+            completion_rx: None,
+            prompt_tx: None,
+            base,
+        }
+    }
+
+    fn physics_process(&mut self, _delta: f64) { emit_tokens!(self) }
 }
 
 #[godot_api]
@@ -179,6 +184,8 @@ impl INode for NobodyWhoPromptChat {
             base,
         }
     }
+
+    fn physics_process(&mut self, _delta: f64) { emit_tokens!(self) }
 }
 
 #[godot_api]
@@ -192,12 +199,15 @@ impl NobodyWhoPromptChat {
 
         // simple closure that returns Err(String) if something fails
         let say_result = || -> Result<(), String> {
+            // get the model instance
             let gd_model_node = self.model_node.as_mut().ok_or("No model node provided. Remember to set a model node on NobodyWhoPromptChat.")?;
             let nobody_model: GdRef<NobodyWhoModel> = gd_model_node.bind();
             let model: llm::Model = nobody_model
                 .model
                 .clone()
                 .ok_or("Could not access LlamaModel from model node.".to_string())?;
+
+            // make a chat string
             let messages = vec![(self.player_name.to_string(), message)];
             let text: String = llm::apply_chat_template(model, messages)?;
             send_text!(self, text);
