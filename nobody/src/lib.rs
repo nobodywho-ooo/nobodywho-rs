@@ -5,8 +5,6 @@ use godot::prelude::*;
 use llm::run_worker;
 use std::sync::mpsc::{Receiver, Sender};
 
-use llama_cpp_2::model::LlamaChatMessage;
-
 struct NobodyWhoExtension;
 
 #[gdextension]
@@ -194,7 +192,6 @@ impl NobodyWhoPromptChat {
 
         // simple closure that returns Err(String) if something fails
         let say_result = || -> Result<(), String> {
-            let tx: &Sender<String> = self.prompt_tx.as_ref().ok_or("Channel not initialized. Remember to call run() before talking to character.")?;
             let gd_model_node = self.model_node.as_mut().ok_or("No model node provided. Remember to set a model node on NobodyWhoPromptChat.")?;
             let nobody_model: GdRef<NobodyWhoModel> = gd_model_node.bind();
             let model: llm::Model = nobody_model

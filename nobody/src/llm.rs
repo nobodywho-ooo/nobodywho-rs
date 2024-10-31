@@ -29,9 +29,12 @@ pub fn get_model(model_path: &str) -> Arc<LlamaModel> {
 }
 
 pub fn apply_chat_template(model: Model, chat: Vec<(String, String)>) -> Result<String, String> {
-    let proper_chat: Vec<LlamaChatMessage> = chat.iter().map(|t| LlamaChatMessage::new(t.1, t.2));
-    let formatted = model.apply_chat_template(None, proper_chat, true).map_err(|e| e.to_string())?;
-    Ok(formatted)
+    let chat_result: Result<Vec<LlamaChatMessage>, String> = chat
+        .into_iter()
+        .map(|t| LlamaChatMessage::new(t.0, t.1).map_err(|e| e.to_string()))
+        .collect();
+    let chat_string = model.apply_chat_template(None, chat_result?, true).map_err(|e| e.to_string())?;
+    Ok(chat_string)
 }
 
 pub fn run_worker(
