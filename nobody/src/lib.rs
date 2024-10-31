@@ -94,40 +94,57 @@ impl INode for NobodyWhoPromptCompletion {
     }
 }
 
-#[godot_api]
-impl NobodyWhoPromptCompletion {
-    #[func]
-    fn run(&mut self) {
-        if let Some(gd_model_node) = self.model_node.as_mut() {
-            let nobody_model: GdRef<NobodyWhoModel> = gd_model_node.bind();
-            if let Some(model) = nobody_model.model.clone() {
-                // create channels for communicating with worker thread
+macro_rules! run_model {
+    ($self:ident) => {
+        {
+            // simple closure that loads the model and returns a result
+            // TODO: why does run_result need to be mutable?
+            let mut run_result = || -> Result<(), String> {
+                // get NobodyWhoModel
+                let gd_model_node = $self.model_node.as_mut().ok_or("Model node is not set.")?;
+                let nobody_model: GdRef<NobodyWhoModel> = gd_model_node.bind();
+                let model: Arc<LlamaModel> = nobody_model.model.clone().ok_or("Could not access NobodyWhoModel.")?;
+
+                // make and store channels for communicating with the llm worker thread
                 let (prompt_tx, prompt_rx) = std::sync::mpsc::channel::<String>();
                 let (completion_tx, completion_rx) = std::sync::mpsc::channel::<llm::LLMOutput>();
-                self.prompt_tx = Some(prompt_tx);
-                self.completion_rx = Some(completion_rx);
+                $self.prompt_tx = Some(prompt_tx);
+                $self.completion_rx = Some(completion_rx);
 
-                // start worker thread
+                // start the llm worker
                 let seed = nobody_model.seed;
                 std::thread::spawn(move || {
                     run_worker(model, prompt_rx, completion_tx, seed);
                 });
-            } else {
-                godot_error!("Unexpected: Model node is not ready yet.");
-            }
-        } else {
-            godot_error!("Model node not set");
-        }
-    }
 
-    #[func]
-    fn prompt(&mut self, prompt: String) {
+                Ok(())
+            };
+
+            // run it and show error in godot if it fails
+            if let Err(msg) = run_result() {
+                godot_error!("Error running model: {}", msg);
+            }
+        }
+    };
+}
+
+macro_rules! send_text {
+    ($self:ident) => {
         if let Some(tx) = self.prompt_tx.as_ref() {
             tx.send(prompt).unwrap();
         } else {
             godot_error!("Model not initialized. Call `run` first");
         }
     }
+}
+
+#[godot_api]
+impl NobodyWhoPromptCompletion {
+    #[func]
+    fn run(&mut self) { run_model!(self) }
+
+    #[func]
+    fn prompt(&mut self, prompt: String) { send_text(self) }
 
     #[signal]
     fn completion_updated();
@@ -148,8 +165,8 @@ struct NobodyWhoPromptChat {
     #[export]
     npc_name: GString,
 
-    query_tx: Option<Sender<String>>,
-    response_rx: Option<Receiver<llm::LLMOutput>>,
+    prompt_tx: Option<Sender<String>>,
+    completion_rx: Option<Receiver<llm::LLMOutput>>,
 
     base: Base<Node>,
 }
@@ -161,8 +178,8 @@ impl INode for NobodyWhoPromptChat {
             model_node: None,
             player_name: "Player".into(),
             npc_name: "Character".into(),
-            query_tx: None,
-            response_rx: None,
+            prompt_tx: None,
+            completion_rx: None,
             base,
         }
     }
@@ -171,27 +188,7 @@ impl INode for NobodyWhoPromptChat {
 #[godot_api]
 impl NobodyWhoPromptChat {
     #[func]
-    fn run(&mut self) {
-        if let Some(gd_model_node) = self.model_node.as_mut() {
-            let nobody_model: GdRef<NobodyWhoModel> = gd_model_node.bind();
-            if let Some(model) = nobody_model.model.clone() {
-                let (query_tx, query_rx) = std::sync::mpsc::channel::<String>();
-                let (response_tx, response_rx) = std::sync::mpsc::channel::<llm::LLMOutput>();
-
-                self.query_tx = Some(query_tx);
-                self.response_rx = Some(response_rx);
-
-                let seed = nobody_model.seed;
-                std::thread::spawn(move || {
-                    run_worker(model, query_rx, response_tx, seed);
-                });
-            } else {
-                godot_error!("Unexpected: Model node is not ready yet.");
-            }
-        } else {
-            godot_error!("Model node not set");
-        }
-    }
+    fn run(&mut self) { run_model!(self) }
 
     #[func]
     fn say(&mut self, message: String) {
@@ -199,14 +196,8 @@ impl NobodyWhoPromptChat {
 
         // simple closure that returns Err(String) if something fails
         let say_result = || -> Result<(), String> {
-            let tx: &Sender<String> = self.query_tx.as_ref().ok_or(
-                "Channel not initialized. Remember to call run() before talking to character."
-                    .to_string(),
-            )?;
-            let gd_model_node = self.model_node.as_mut().ok_or(
-                "No model node provided. Remember to set a model node on NobodyWhoPromptChat."
-                    .to_string(),
-            )?;
+            let tx: &Sender<String> = self.prompt_tx.as_ref().ok_or("Channel not initialized. Remember to call run() before talking to character.")?;
+            let gd_model_node = self.model_node.as_mut().ok_or("No model node provided. Remember to set a model node on NobodyWhoPromptChat.")?;
             let nobody_model: GdRef<NobodyWhoModel> = gd_model_node.bind();
             let model: Arc<LlamaModel> = nobody_model
                 .model
