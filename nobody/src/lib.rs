@@ -1,6 +1,6 @@
 mod llm;
 
-use godot::classes::INode;
+use godot::classes::{INode, ProjectSettings};
 use godot::prelude::*;
 use llm::run_worker;
 use std::sync::mpsc::{Receiver, Sender};
@@ -13,7 +13,7 @@ unsafe impl ExtensionLibrary for NobodyWhoExtension {}
 #[derive(GodotClass)]
 #[class(base=Node)]
 struct NobodyWhoModel {
-    #[export(file)]
+    #[export(file="*.gguf")]
     model_path: GString,
 
     #[export]
@@ -26,7 +26,8 @@ struct NobodyWhoModel {
 impl INode for NobodyWhoModel {
     fn init(_base: Base<Node>) -> Self {
         // default values to show in godot editor
-        let model_path: String = "model.bin".into();
+        let model_path: String = "model.gguf".into();
+
         let seed = 1234;
 
         Self {
@@ -37,7 +38,8 @@ impl INode for NobodyWhoModel {
     }
 
     fn ready(&mut self) {
-        let model_path_string: String = self.model_path.clone().into();
+        let project_settings = ProjectSettings::singleton();
+        let model_path_string: String = project_settings.globalize_path(self.model_path.clone()).into();
         self.model = Some(llm::get_model(model_path_string.as_str()));
     }
 }
@@ -161,14 +163,9 @@ struct NobodyWhoPromptChat {
     model_node: Option<Gd<NobodyWhoModel>>,
 
     #[export]
-    player_name: GString,
-
-    #[export]
-    npc_name: GString,
-
-    #[export]
     #[var(hint = MULTILINE_TEXT)]
     prompt: GString,
+    sent_prompt: bool,
 
     prompt_tx: Option<Sender<String>>,
     completion_rx: Option<Receiver<llm::LLMOutput>>,
@@ -181,9 +178,8 @@ impl INode for NobodyWhoPromptChat {
     fn init(base: Base<Node>) -> Self {
         Self {
             model_node: None,
-            player_name: "Player".into(),
-            npc_name: "Character".into(),
             prompt: "".into(),
+            sent_prompt: false,
             prompt_tx: None,
             completion_rx: None,
             base,
@@ -213,8 +209,14 @@ impl NobodyWhoPromptChat {
                 .ok_or("Could not access LlamaModel from model node.".to_string())?;
 
             // make a chat string
-            let messages = vec![(self.player_name.to_string(), message)];
+            let mut messages: Vec<(String, String)> = vec![];
+            if !self.sent_prompt {
+                messages.push(("system".into(), (&self.prompt).into()));
+                self.sent_prompt = true;
+            }
+            messages.push(("user".to_string(), message));
             let text: String = llm::apply_chat_template(model, messages)?;
+            println!("CHAT PROMPT: {text}");
             send_text!(self, text);
             Ok::<(), String>(())
         };
