@@ -2,10 +2,8 @@ mod llm;
 
 use godot::classes::INode;
 use godot::prelude::*;
-use llama_cpp_2::model::LlamaModel;
 use llm::run_worker;
 use std::sync::mpsc::{Receiver, Sender};
-use std::sync::Arc;
 
 use llama_cpp_2::model::LlamaChatMessage;
 
@@ -23,7 +21,7 @@ struct NobodyWhoModel {
     #[export]
     seed: u32,
 
-    model: Option<Arc<LlamaModel>>,
+    model: Option<llm::Model>,
 }
 
 #[godot_api]
@@ -103,7 +101,7 @@ macro_rules! run_model {
                 // get NobodyWhoModel
                 let gd_model_node = $self.model_node.as_mut().ok_or("Model node is not set.")?;
                 let nobody_model: GdRef<NobodyWhoModel> = gd_model_node.bind();
-                let model: Arc<LlamaModel> = nobody_model.model.clone().ok_or("Could not access NobodyWhoModel.")?;
+                let model: llm::Model = nobody_model.model.clone().ok_or("Could not access NobodyWhoModel.")?;
 
                 // make and store channels for communicating with the llm worker thread
                 let (prompt_tx, prompt_rx) = std::sync::mpsc::channel::<String>();
@@ -129,9 +127,9 @@ macro_rules! run_model {
 }
 
 macro_rules! send_text {
-    ($self:ident) => {
-        if let Some(tx) = self.prompt_tx.as_ref() {
-            tx.send(prompt).unwrap();
+    ($self:ident, $text:expr) => {
+        if let Some(tx) = $self.prompt_tx.as_ref() {
+            tx.send($text).unwrap();
         } else {
             godot_error!("Model not initialized. Call `run` first");
         }
@@ -144,7 +142,7 @@ impl NobodyWhoPromptCompletion {
     fn run(&mut self) { run_model!(self) }
 
     #[func]
-    fn prompt(&mut self, prompt: String) { send_text(self) }
+    fn prompt(&mut self, prompt: String) { send_text!(self, prompt) }
 
     #[signal]
     fn completion_updated();
@@ -199,13 +197,13 @@ impl NobodyWhoPromptChat {
             let tx: &Sender<String> = self.prompt_tx.as_ref().ok_or("Channel not initialized. Remember to call run() before talking to character.")?;
             let gd_model_node = self.model_node.as_mut().ok_or("No model node provided. Remember to set a model node on NobodyWhoPromptChat.")?;
             let nobody_model: GdRef<NobodyWhoModel> = gd_model_node.bind();
-            let model: Arc<LlamaModel> = nobody_model
+            let model: llm::Model = nobody_model
                 .model
                 .clone()
                 .ok_or("Could not access LlamaModel from model node.".to_string())?;
-            let chatmsg = LlamaChatMessage::new(self.player_name.to_string(), message)
-                .map_err(|e| format!("{:?}", e).to_string())?;
-            llm::send_chat(model, tx, vec![chatmsg]).unwrap();
+            let messages = vec![(self.player_name.to_string(), message)];
+            let text: String = llm::apply_chat_template(model, messages)?;
+            send_text!(self, text);
             Ok::<(), String>(())
         };
 

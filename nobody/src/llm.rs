@@ -19,6 +19,8 @@ pub enum LLMOutput {
     Done,
 }
 
+pub type Model = Arc<LlamaModel>;
+
 pub fn get_model(model_path: &str) -> Arc<LlamaModel> {
     // TODO: Set the number of GPU layers
     let model_params = LlamaModelParams::default().with_n_gpu_layers(1000);
@@ -26,14 +28,10 @@ pub fn get_model(model_path: &str) -> Arc<LlamaModel> {
     Arc::new(LlamaModel::load_from_file(&LLAMA_BACKEND, model_path, &model_params).unwrap())
 }
 
-pub fn send_chat(
-    model: Arc<LlamaModel>,
-    query_tx: &Sender<String>,
-    chat: Vec<LlamaChatMessage>,
-) -> Result<(), Box<dyn std::error::Error>> {
-    let prompt = model.apply_chat_template(None, chat, true)?;
-    query_tx.send(prompt)?;
-    Ok(())
+pub fn apply_chat_template(model: Model, chat: Vec<(String, String)>) -> Result<String, String> {
+    let proper_chat: Vec<LlamaChatMessage> = chat.iter().map(|t| LlamaChatMessage::new(t.1, t.2));
+    let formatted = model.apply_chat_template(None, proper_chat, true).map_err(|e| e.to_string())?;
+    Ok(formatted)
 }
 
 pub fn run_worker(
