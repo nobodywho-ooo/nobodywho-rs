@@ -167,6 +167,10 @@ struct NobodyWhoPromptChat {
     #[export]
     npc_name: GString,
 
+    #[export]
+    #[var(hint = MULTILINE_TEXT)]
+    prompt: GString,
+
     prompt_tx: Option<Sender<String>>,
     completion_rx: Option<Receiver<llm::LLMOutput>>,
 
@@ -180,6 +184,7 @@ impl INode for NobodyWhoPromptChat {
             model_node: None,
             player_name: "Player".into(),
             npc_name: "Character".into(),
+            prompt: "".into(),
             prompt_tx: None,
             completion_rx: None,
             base,
