@@ -36,6 +36,38 @@ jobs:
           name: build-${{ matrix.target }}-${{ matrix.toolchain }}-${{ matrix.profile }}
           path: ./nobodywho/target
 
+  cargo-build-macos-arm:
+    runs-on: macos-12
+    strategy:
+      fail-fast: false
+      matrix:
+        target: 
+          - "x86_64-apple-darwin"
+          - "aarch64-apple-darwin"
+        toolchain:
+          - "stable"
+        profile:
+          - "debug"
+          - "release"
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+          . "$HOME/.cargo/env"
+          rustup update stable && rustup default stable
+          rustup target add 
+          rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
+          rustup target add ${{ matrix.target }}
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+      - run: brew install cmake
+      - run: cargo build --verbose ${{ matrix.profile == 'release' && '--release' || '' }}
+        working-directory: ./nobodywho
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: build-${{ matrix.target }}-${{ matrix.toolchain }}-${{ matrix.profile }}
+          path: ./nobodywho/target
+
   cargo-test:
     runs-on: Linux
     strategy:
