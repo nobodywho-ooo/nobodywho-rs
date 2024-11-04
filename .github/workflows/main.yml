@@ -36,7 +36,7 @@ jobs:
           name: build-${{ matrix.target }}-${{ matrix.toolchain }}-${{ matrix.profile }}
           path: ./nobodywho/target
 
-  cargo-build-macos-arm:
+  cargo-build-macos:
     runs-on: macos-15
     strategy:
       fail-fast: false
@@ -87,7 +87,7 @@ jobs:
         working-directory: ./nobodywho
 
   zip-distributable:
-    needs: [cargo-build]
+    needs: [cargo-build, cargo-build-macos]
     runs-on: Linux
     steps:
       - name: Download all build artifacts
