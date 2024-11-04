@@ -67,4 +67,9 @@ jobs:
 
       - name: Zip all artifacts
         run: |
-          zip -r distributable.zip ./artifacts
+          zip -r nobodywho.zip ./artifacts
+      - name: Upload zipped build artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: build-nobodywho-zip-distributable
+          path: ./nobodywho.zip
