@@ -37,7 +37,7 @@ jobs:
           path: ./nobodywho/target
 
   cargo-build-macos-arm:
-    runs-on: macos-12
+    runs-on: macos-15
     strategy:
       fail-fast: false
       matrix:
