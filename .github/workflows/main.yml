@@ -13,6 +13,9 @@ jobs:
           - "x86_64-unknown-linux-gnu"
         toolchain:
           - "stable"
+        flags:
+          - ""
+          - "--release"
     steps:
       - uses: actions/checkout@v4
       - run: |
@@ -24,8 +27,8 @@ jobs:
       - run: |
           sudo apt-get update
           sudo apt-get install -y libclang-dev cmake libshaderc-dev libvulkan-dev glslc
-
-      - run: cargo build --verbose
+          sudo apt-get install -y libclang-dev cmake
+      - run: cargo build --verbose ${{ matrix.flags }}
         working-directory: ./nobodywho
 
   cargo-test:
