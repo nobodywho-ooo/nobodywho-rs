@@ -13,9 +13,9 @@ jobs:
           - "x86_64-unknown-linux-gnu"
         toolchain:
           - "stable"
-        flags:
-          - ""
-          - "--release"
+        profile:
+          - "debug"
+          - "release"
     steps:
       - uses: actions/checkout@v4
       - run: |
@@ -28,8 +28,13 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libclang-dev cmake libshaderc-dev libvulkan-dev glslc
           sudo apt-get install -y libclang-dev cmake
-      - run: cargo build --verbose ${{ matrix.flags }}
+      - run: cargo build --verbose ${{ matrix.profile == 'release' && '--release' || '' }}
         working-directory: ./nobodywho
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: build-${{ matrix.target }}-${{ matrix.toolchain }}-${{ matrix.profile }}
+          path: ./nobodywho/target
 
   cargo-test:
     runs-on: Linux
@@ -50,3 +55,6 @@ jobs:
       - run: wget "https://huggingface.co/bartowski/gemma-2-2b-it-GGUF/resolve/main/gemma-2-2b-it-Q5_K_M.gguf" -O ./nobodywho/model.bin
       - run: cargo test -- --nocapture --test-threads=1
         working-directory: ./nobodywho
+
+  zip-distributable:
+    needs: [cargo-build]
