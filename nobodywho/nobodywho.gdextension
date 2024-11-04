@@ -1,0 +1,14 @@
+[configuration]
+entry_symbol = "gdext_rust_init"
+compatibility_minimum = 4.3
+reloadable = true
+
+[libraries]
+linux.debug.x86_64 =     "res://nobodywho/linux-x86_64/debug/libnobodywho.so"
+linux.release.x86_64 =   "res://nobodywho/linux-x86_64/release/libnobodywho.so"
+windows.debug.x86_64 =   "res://nobodywho/windows-x86_64/target/debug/nobodywho.dll"
+windows.release.x86_64 = "res://nobodywho/windows-x86_64/target/release/nobodywho.dll"
+macos.debug =            "res://nobodywho/macos-x86_64/target/debug/libnobodywho.dylib"
+macos.release =          "res://nobodywho/macos-x86_64/target/release/libnobodywho.dylib"
+macos.debug.arm64 =      "res://nobodywho/macos-arm64/target/debug/libnobodywho.dylib"
+macos.release.arm64 =    "res://nobodywho/macos-arm64/target/release/libnobodywho.dylib"
