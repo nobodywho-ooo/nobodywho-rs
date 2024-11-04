@@ -58,3 +58,13 @@ jobs:
 
   zip-distributable:
     needs: [cargo-build]
+    runs-on: Linux
+    steps:
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v3
+        with:
+          path: ./artifacts
+
+      - name: Zip all artifacts
+        run: |
+          zip -r distributable.zip ./artifacts
