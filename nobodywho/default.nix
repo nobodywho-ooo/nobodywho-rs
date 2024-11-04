@@ -6,6 +6,7 @@ rustPlatform.buildRustPackage {
   version = "0.0.0";
   src = ./.;
   nativeBuildInputs = [ llvmPackages_12.bintools cmake vulkan-headers vulkan-loader shaderc ];
+  buildInputs = [ vulkan-loader vulkan-headers shaderc ];
   cargoLock = {
     lockFile = ./Cargo.lock;
     outputHashes = {
