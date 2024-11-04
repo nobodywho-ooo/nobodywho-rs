@@ -6,6 +6,7 @@ use llama_cpp_2::context::params::LlamaContextParams;
 use llama_cpp_2::llama_backend::LlamaBackend;
 use llama_cpp_2::llama_batch::LlamaBatch;
 use llama_cpp_2::model::params::LlamaModelParams;
+use llama_cpp_2::model::LlamaChatMessage;
 use llama_cpp_2::model::LlamaModel;
 use llama_cpp_2::model::{AddBos, Special};
 use llama_cpp_2::token::data_array::LlamaTokenDataArray;
@@ -18,11 +19,22 @@ pub enum LLMOutput {
     Done,
 }
 
+pub type Model = Arc<LlamaModel>;
+
 pub fn get_model(model_path: &str) -> Arc<LlamaModel> {
     // TODO: Set the number of GPU layers
     let model_params = LlamaModelParams::default().with_n_gpu_layers(1000);
     let model_params = pin!(model_params);
     Arc::new(LlamaModel::load_from_file(&LLAMA_BACKEND, model_path, &model_params).unwrap())
+}
+
+pub fn apply_chat_template(model: Model, chat: Vec<(String, String)>) -> Result<String, String> {
+    let chat_result: Result<Vec<LlamaChatMessage>, String> = chat
+        .into_iter()
+        .map(|t| LlamaChatMessage::new(t.0, t.1).map_err(|e| e.to_string()))
+        .collect();
+    let chat_string = model.apply_chat_template(None, chat_result?, true).map_err(|e| e.to_string())?;
+    Ok(chat_string)
 }
 
 pub fn run_worker(
@@ -92,7 +104,7 @@ pub fn run_worker(
                 let _decode_result =
                     utf8decoder.decode_to_string(&output_bytes, &mut output_string, false);
 
-                // sendb new token string back to user
+                // send new token string back to user
                 completion_tx.send(LLMOutput::Token(output_string)).unwrap();
 
                 // prepare batch or the next decode
