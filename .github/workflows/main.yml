@@ -54,8 +54,6 @@ jobs:
       - run: |
           curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
           . "$HOME/.cargo/env"
-          rustup update stable && rustup default stable
-          rustup target add 
           rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
           rustup target add ${{ matrix.target }}
           echo "$HOME/.cargo/bin" >> $GITHUB_PATH
