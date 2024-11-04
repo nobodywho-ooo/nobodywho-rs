@@ -31,7 +31,7 @@ jobs:
       - run: cargo build --verbose ${{ matrix.profile == 'release' && '--release' || '' }}
         working-directory: ./nobodywho
       - name: Upload build artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: build-${{ matrix.target }}-${{ matrix.toolchain }}-${{ matrix.profile }}
           path: ./nobodywho/target
@@ -61,7 +61,7 @@ jobs:
       - run: cargo build --verbose ${{ matrix.profile == 'release' && '--release' || '' }}
         working-directory: ./nobodywho
       - name: Upload build artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: build-${{ matrix.target }}-${{ matrix.toolchain }}-${{ matrix.profile }}
           path: ./nobodywho/target
@@ -91,7 +91,7 @@ jobs:
     runs-on: Linux
     steps:
       - name: Download all build artifacts
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           path: ./artifacts
 
