@@ -372,7 +372,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e943b2c21337b7e3ec6678500687cdc741b7639ad457f234693352075c082204"
 
 [[package]]
-name = "nobody"
+name = "nobodywho"
 version = "0.1.0"
 dependencies = [
  "encoding_rs",

@@ -10,7 +10,7 @@
       pkgs = (import nixpkgs { system = system; });
     in
   {
-      packages.default = pkgs.callPackage ./nobody {};
-      devShells.default = import ./nobody/shell.nix { inherit pkgs; };
+      packages.default = pkgs.callPackage ./nobodywho {};
+      devShells.default = import ./nobodywho/shell.nix { inherit pkgs; };
   });
 }
