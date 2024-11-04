@@ -26,7 +26,7 @@ jobs:
           sudo apt-get install -y libclang-dev cmake
 
       - run: cargo build --verbose
-        working-directory: ./nobody
+        working-directory: ./nobodywho
 
   cargo-test:
     runs-on: Linux
@@ -44,6 +44,6 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libclang-dev cmake
 
-      - run: wget "https://huggingface.co/bartowski/gemma-2-2b-it-GGUF/resolve/main/gemma-2-2b-it-Q5_K_M.gguf" -O ./nobody/model.bin
+      - run: wget "https://huggingface.co/bartowski/gemma-2-2b-it-GGUF/resolve/main/gemma-2-2b-it-Q5_K_M.gguf" -O ./nobodywho/model.bin
       - run: cargo test -- --nocapture
-        working-directory: ./nobody
+        working-directory: ./nobodywho
