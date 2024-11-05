@@ -45,5 +45,5 @@ jobs:
           sudo apt-get install -y libclang-dev cmake libshaderc-dev libvulkan-dev glslc
 
       - run: wget "https://huggingface.co/bartowski/gemma-2-2b-it-GGUF/resolve/main/gemma-2-2b-it-Q5_K_M.gguf" -O ./nobodywho/model.bin
-      - run: cargo test -- --nocapture
+      - run: cargo test -- --nocapture --test-threads=1
         working-directory: ./nobodywho
