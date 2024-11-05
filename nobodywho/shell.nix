@@ -12,4 +12,7 @@ pkgs.mkShell {
     pkgs.vulkan-loader
     pkgs.shaderc
   ];
+  shellHook = ''
+    ulimit -n 2048
+  '';
 }
