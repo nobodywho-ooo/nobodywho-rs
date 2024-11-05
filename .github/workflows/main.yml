@@ -99,7 +99,7 @@ jobs:
         run: |
           zip -r nobodywho.zip ./artifacts
       - name: Upload zipped build artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: build-nobodywho-zip-distributable
           path: ./nobodywho.zip
