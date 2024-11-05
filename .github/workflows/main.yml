@@ -63,7 +63,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: build-${{ matrix.target }}-${{ matrix.toolchain }}-${{ matrix.profile }}
-          path: ./nobodywho/target/${{ matrix.profile }}/libnobody.dylib
+          path: ./nobodywho/target/${{ matrix.profile }}/libnobodywho.dylib
 
   cargo-test:
     runs-on: Linux
