@@ -34,7 +34,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: build-${{ matrix.target }}-${{ matrix.toolchain }}-${{ matrix.profile }}
-          path: ./nobodywho/target
+          path: ./nobodywho/target/${{ matrix.profile }}/${{ contains(matrix.target, "linux") && "libnobodywho.so" || "nobodywho.dll" }}
 
   cargo-build-macos:
     runs-on: macos-15
@@ -64,7 +64,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: build-${{ matrix.target }}-${{ matrix.toolchain }}-${{ matrix.profile }}
-          path: ./nobodywho/target
+          path: ./nobodywho/target/${{ matrix.profile }}/libnobody.dylib
 
   cargo-test:
     runs-on: Linux
