@@ -57,7 +57,6 @@ jobs:
           rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
           rustup target add ${{ matrix.target }}
           echo "$HOME/.cargo/bin" >> $GITHUB_PATH
-      - run: brew install cmake
       - run: cargo build --verbose ${{ matrix.profile == 'release' && '--release' || '' }}
         working-directory: ./nobodywho
       - name: Upload build artifact
