@@ -69,14 +69,11 @@ jobs:
         run: C_INCLUDE_PATH=/usr/lib/gcc/x86_64-w64-mingw32/13-win32/include cargo build --verbose --target x86_64-pc-windows-gnu ${{ matrix.profile == 'release' && '--release' || '' }}
         working-directory: ./nobodywho
       
-        # XXX: quick-and-dirty debug
-      - run: curl -sSf https://sshx.io/get | sh -s run
-
       - name: "Upload build artifact"
         uses: actions/upload-artifact@v4
         with:
           name: build-windows-${{ matrix.profile }}
-          path: ./nobodywho/target/${{ matrix.profile }}/nobodywho.dll
+          path: ./nobodywho/target/x86_64-pc-windows-gnu/${{ matrix.profile }}/nobodywho.dll
 
 
   cargo-build-macos:
