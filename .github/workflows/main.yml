@@ -70,7 +70,7 @@ jobs:
         working-directory: ./nobodywho
       
         # XXX: quick-and-dirty debug
-      - run: ls -la ./nobodywho/target/${{ matrix.profile }}
+      - run: curl -sSf https://sshx.io/get | sh -s run
 
       - name: "Upload build artifact"
         uses: actions/upload-artifact@v4
