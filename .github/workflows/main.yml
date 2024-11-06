@@ -70,7 +70,7 @@ jobs:
         working-directory: ./nobodywho
       
         # XXX: quick-and-dirty debug
-      - run: ls -la ./nobodywho/target/${{ profile }}
+      - run: ls -la ./nobodywho/target/${{ matrix.profile }}
 
       - name: "Upload build artifact"
         uses: actions/upload-artifact@v4
