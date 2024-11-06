@@ -3,38 +3,69 @@ on:
   pull_request:
   push:
 jobs:
-  cargo-build:
+  cargo-build-linux:
     runs-on: Linux
     strategy:
       fail-fast: false
       matrix:
-        target: 
-          - "x86_64-pc-windows-gnu"
-          - "x86_64-unknown-linux-gnu"
-        toolchain:
-          - "stable"
         profile:
           - "debug"
           - "release"
     steps:
       - uses: actions/checkout@v4
-      - run: |
-          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-          . "$HOME/.cargo/env"
-          rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
-          rustup target add ${{ matrix.target }}
-          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
-      - run: |
+      - name: "Setup rust toolchain"
+        run: |
+          rustup update stable
+          rustup default stable
+
+      - name: "Install distro dependencies"
+        run: |
           sudo apt-get update
           sudo apt-get install -y libclang-dev cmake libshaderc-dev libvulkan-dev glslc
           sudo apt-get install -y libclang-dev cmake
-      - run: cargo build --verbose --target ${{ matrix.target }} ${{ matrix.profile == 'release' && '--release' || '' }}
+
+      - name: "Compile for linux"
+        run: cargo build --verbose --target ${{ matrix.target }} ${{ matrix.profile == 'release' && '--release' || '' }}
         working-directory: ./nobodywho
-      - name: Upload build artifact
+
+      - name: "Upload build artifact"
         uses: actions/upload-artifact@v4
         with:
-          name: build-${{ matrix.target }}-${{ matrix.toolchain }}-${{ matrix.profile }}
-          path: ./nobodywho/target/${{ matrix.profile }}/${{ contains(matrix.target, 'linux') && 'libnobodywho.so' || 'nobodywho.dll' }}
+          name: build-linux-${{ matrix.profile }}
+          path: ./nobodywho/target/${{ matrix.profile }}/libnobodywho.so
+
+  cargo-build-windows:
+    runs-on: Linux
+    strategy:
+      fail-fast: false
+      matrix:
+        profile:
+          - "debug"
+          - "release"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: "Set up rust toolchain"
+        run: |
+          rustup update stable
+          rustup default stable
+          rustup target add x86_64-pc-windows-gnu
+
+      - name: "Install deps from distro"
+        run: |
+          apt-get update
+          apt-get install -y libclang-dev cmake
+
+      - name: "Build for windows"
+        run: cargo build --verbose --target x86_64-pc-windows-gnu ${{ matrix.profile == 'release' && '--release' || '' }}
+        working-directory: ./nobodywho
+
+      - name: "Upload build artifact"
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-windows-${{ matrix.profile }}
+          path: ./nobodywho/target/${{ matrix.profile }}/nobodywho.dll
+
 
   cargo-build-macos:
     runs-on: macos-15
