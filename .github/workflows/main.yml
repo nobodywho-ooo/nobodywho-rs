@@ -156,13 +156,13 @@ jobs:
       - name: "Download all build artifacts"
         uses: actions/download-artifact@v4
         with:
-          path: ./nobodywho
+          path: ./nobodywho-release
 
       - name: Add gdextension file
-        run: cp ./nobodywho.gdextension ./nobodywho
+        run: cp ./nobodywho/nobodywho.gdextension ./nobodywho-release
 
       - name: "Upload zipped build artifacts"
         uses: actions/upload-artifact@v4
         with:
           name: nobodywho-all-platforms
-          path: ./nobodywho
+          path: ./nobodywho-release
