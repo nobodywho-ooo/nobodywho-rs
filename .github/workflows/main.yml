@@ -61,10 +61,11 @@ jobs:
       - name: "Install deps from distro"
         run: |
           apt-get update
-          apt-get install -y libclang-dev cmake
+          apt-get install -y libclang-dev cmake mingw-w64
+          
 
       - name: "Build for windows"
-        run: cargo build --verbose --target x86_64-pc-windows-gnu ${{ matrix.profile == 'release' && '--release' || '' }}
+        run: C_INCLUDE_PATH=/usr/lib/gcc/x86_64-w64-mingw32/13-win32/include cargo build --verbose --target x86_64-pc-windows-gnu ${{ matrix.profile == 'release' && '--release' || '' }}
         working-directory: ./nobodywho
 
       - name: "Upload build artifact"
