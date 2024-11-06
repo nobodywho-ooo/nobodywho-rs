@@ -40,7 +40,7 @@ jobs:
       - name: "Upload build artifact"
         uses: actions/upload-artifact@v4
         with:
-          name: build-linux-${{ matrix.profile }}
+          name: ${{ matrix.target }}-${{ matrix.profile }}
           path: ./nobodywho/target/${{ matrix.profile }}/libnobodywho.so
 
 
@@ -77,12 +77,12 @@ jobs:
         working-directory: ./nobodywho
 
       - name: "Rename built file"
-        run: cp ./nobodywho/target/${{ matrix.target }}/${{ matrix.profile }}/libnobodywho.dll ./nobodywho-${{ matrix.target }}-${{ matrix.profile }}.dll
+        run: cp ./nobodywho/target/${{ matrix.target }}/${{ matrix.profile }}/nobodywho.dll ./nobodywho-${{ matrix.target }}-${{ matrix.profile }}.dll
       
       - name: "Upload build artifact"
         uses: actions/upload-artifact@v4
         with:
-          name: build-windows-${{ matrix.profile }}
+          name: ${{ matrix.target }}-${{ matrix.profile }}
           path: ./nobodywho-${{ matrix.target }}-${{ matrix.profile }}.dll
 
 
