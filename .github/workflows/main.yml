@@ -8,6 +8,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        target:
+          - "x86_64-unknown-linux-gnu"
         profile:
           - "debug"
           - "release"
@@ -32,17 +34,23 @@ jobs:
         run: cargo build --verbose ${{ matrix.profile == 'release' && '--release' || '' }}
         working-directory: ./nobodywho
 
+      - name: "Rename built file"
+        run: cp ./nobodywho/target/${{ matrix.profile }}/libnobodywho.so ./nobodywho-${{ matrix.target }}-${{ matrix.profile }}.so
+
       - name: "Upload build artifact"
         uses: actions/upload-artifact@v4
         with:
           name: build-linux-${{ matrix.profile }}
           path: ./nobodywho/target/${{ matrix.profile }}/libnobodywho.so
 
+
   cargo-build-windows:
     runs-on: Linux
     strategy:
       fail-fast: false
       matrix:
+        target: 
+          - "x86_64-pc-windows-gnu"
         profile:
           - "debug"
           - "release"
@@ -55,25 +63,27 @@ jobs:
           . "$HOME/.cargo/env"
           rustup update stable
           rustup default stable
-          rustup target add x86_64-pc-windows-gnu
+          rustup target add ${{ matrix.target }}
           echo "$HOME/.cargo/bin" >> $GITHUB_PATH
 
       - name: "Install deps from distro"
         run: |
           apt-get update
           apt-get install -y libclang-dev cmake mingw-w64
-          
 
-      - name: "Build for windows"
+      - name: "Compile for windows"
         # HACK: C_INCLUDE_PATH specified manually here, because it can't find stdbool.h otherwise
-        run: C_INCLUDE_PATH=/usr/lib/gcc/x86_64-w64-mingw32/13-win32/include cargo build --verbose --target x86_64-pc-windows-gnu ${{ matrix.profile == 'release' && '--release' || '' }}
+        run: C_INCLUDE_PATH=/usr/lib/gcc/x86_64-w64-mingw32/13-win32/include cargo build --verbose --target ${{ matrix.target }} ${{ matrix.profile == 'release' && '--release' || '' }}
         working-directory: ./nobodywho
+
+      - name: "Rename built file"
+        run: cp ./nobodywho/target/${{ matrix.target }}/${{ matrix.profile }}/libnobodywho.dll ./nobodywho-${{ matrix.target }}-${{ matrix.profile }}.dll
       
       - name: "Upload build artifact"
         uses: actions/upload-artifact@v4
         with:
           name: build-windows-${{ matrix.profile }}
-          path: ./nobodywho/target/x86_64-pc-windows-gnu/${{ matrix.profile }}/nobodywho.dll
+          path: ./nobodywho-${{ matrix.target }}-${{ matrix.profile }}.dll
 
 
   cargo-build-macos:
@@ -84,8 +94,6 @@ jobs:
         target: 
           - "x86_64-apple-darwin"
           - "aarch64-apple-darwin"
-        toolchain:
-          - "stable"
         profile:
           - "debug"
           - "release"
@@ -94,16 +102,22 @@ jobs:
       - run: |
           curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
           . "$HOME/.cargo/env"
-          rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
+          rustup update stable
+          rustup default stable
           rustup target add ${{ matrix.target }}
           echo "$HOME/.cargo/bin" >> $GITHUB_PATH
       - run: cargo build --verbose ${{ matrix.profile == 'release' && '--release' || '' }}
         working-directory: ./nobodywho
-      - name: Upload build artifact
+
+      - name: "Rename built file"
+        run: cp ./nobodywho/target/${{ matrix.profile }}/libnobodywho.dylib ./nobodywho-${{ matrix.target }}-${{ matrix.profile }}.dylib
+
+      - name: "Upload build artifact"
         uses: actions/upload-artifact@v4
         with:
-          name: build-${{ matrix.target }}-${{ matrix.toolchain }}-${{ matrix.profile }}
-          path: ./nobodywho/target/${{ matrix.profile }}/libnobodywho.dylib
+          name: ${{ matrix.target }}-${{ matrix.profile }}
+          path: ./nobodywho-${{ matrix.target }}-${{ matrix.profile }}.dylib
+
 
   cargo-test:
     runs-on: Linux
@@ -111,19 +125,27 @@ jobs:
       fail-fast: false
     steps:
       - uses: actions/checkout@v4
-      - run: |
+
+      - name: "Set up rust toolchain"
+        run: |
           curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
           . "$HOME/.cargo/env"
-          rustup update stable && rustup default stable
-          rustup target add x86_64-unknown-linux-gnu
+          rustup update stable
+          rustup default stable
           echo "$HOME/.cargo/bin" >> $GITHUB_PATH
-      - run: |
+
+      - name: "Install deps from distro"
+        run: |
           sudo apt-get update
           sudo apt-get install -y libclang-dev cmake libshaderc-dev libvulkan-dev glslc
 
-      - run: wget "https://huggingface.co/bartowski/gemma-2-2b-it-GGUF/resolve/main/gemma-2-2b-it-Q5_K_M.gguf" -O ./nobodywho/model.bin
-      - run: cargo test -- --nocapture --test-threads=1
+      - name: "Download test model"
+        run: wget "https://huggingface.co/bartowski/gemma-2-2b-it-GGUF/resolve/main/gemma-2-2b-it-Q5_K_M.gguf" -O ./nobodywho/model.bin
+
+      - name: "Run unit tests"
+        run: cargo test -- --nocapture
         working-directory: ./nobodywho
+
 
   zip-distributable:
     needs: [cargo-build-linux, cargo-build-macos, cargo-build-windows]
