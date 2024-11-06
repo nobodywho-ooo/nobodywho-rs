@@ -65,8 +65,12 @@ jobs:
           
 
       - name: "Build for windows"
+        # HACK: C_INCLUDE_PATH specified manually here, because it can't find stdbool.h otherwise
         run: C_INCLUDE_PATH=/usr/lib/gcc/x86_64-w64-mingw32/13-win32/include cargo build --verbose --target x86_64-pc-windows-gnu ${{ matrix.profile == 'release' && '--release' || '' }}
         working-directory: ./nobodywho
+      
+        # XXX: quick-and-dirty debug
+      - run: ls -la ./nobodywho/target/${{ profile }}
 
       - name: "Upload build artifact"
         uses: actions/upload-artifact@v4
