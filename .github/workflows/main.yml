@@ -151,16 +151,18 @@ jobs:
     needs: [cargo-build-linux, cargo-build-macos, cargo-build-windows]
     runs-on: Linux
     steps:
-      - name: Download all build artifacts
+      - uses: actions/checkout@v4
+
+      - name: "Download all build artifacts"
         uses: actions/download-artifact@v4
         with:
-          path: ./artifacts
+          path: ./nobodywho
 
-      - name: Zip all artifacts
-        run: |
-          zip -r nobodywho.zip ./artifacts
-      - name: Upload zipped build artifacts
+      - name: Add gdextension file
+        run: cp ./nobodywho.gdextension ./nobodywho
+
+      - name: "Upload zipped build artifacts"
         uses: actions/upload-artifact@v4
         with:
-          name: build-nobodywho-zip-distributable
-          path: ./nobodywho.zip
+          name: nobodywho-all-platforms
+          path: ./nobodywho
