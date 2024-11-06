@@ -13,10 +13,14 @@ jobs:
           - "release"
     steps:
       - uses: actions/checkout@v4
+
       - name: "Setup rust toolchain"
         run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+          . "$HOME/.cargo/env"
           rustup update stable
           rustup default stable
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
 
       - name: "Install distro dependencies"
         run: |
@@ -25,7 +29,7 @@ jobs:
           sudo apt-get install -y libclang-dev cmake
 
       - name: "Compile for linux"
-        run: cargo build --verbose --target ${{ matrix.target }} ${{ matrix.profile == 'release' && '--release' || '' }}
+        run: cargo build --verbose ${{ matrix.profile == 'release' && '--release' || '' }}
         working-directory: ./nobodywho
 
       - name: "Upload build artifact"
@@ -47,9 +51,12 @@ jobs:
 
       - name: "Set up rust toolchain"
         run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+          . "$HOME/.cargo/env"
           rustup update stable
           rustup default stable
           rustup target add x86_64-pc-windows-gnu
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
 
       - name: "Install deps from distro"
         run: |
