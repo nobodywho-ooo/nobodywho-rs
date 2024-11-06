@@ -4,11 +4,11 @@ compatibility_minimum = 4.3
 reloadable = true
 
 [libraries]
-linux.debug.x86_64 =     "res://nobodywho/linux-x86_64/debug/libnobodywho.so"
-linux.release.x86_64 =   "res://nobodywho/linux-x86_64/release/libnobodywho.so"
-windows.debug.x86_64 =   "res://nobodywho/windows-x86_64/target/debug/nobodywho.dll"
-windows.release.x86_64 = "res://nobodywho/windows-x86_64/target/release/nobodywho.dll"
-macos.debug =            "res://nobodywho/macos-x86_64/target/debug/libnobodywho.dylib"
-macos.release =          "res://nobodywho/macos-x86_64/target/release/libnobodywho.dylib"
-macos.debug.arm64 =      "res://nobodywho/macos-arm64/target/debug/libnobodywho.dylib"
-macos.release.arm64 =    "res://nobodywho/macos-arm64/target/release/libnobodywho.dylib"
+linux.debug.x86_64 =     "res://nobodywho/nobodywho-x86_64-unknown-linux-gnu-debug.so"
+linux.release.x86_64 =   "res://nobodywho/nobodywho-x86_64-unknown-linux-gnu-release.so"
+windows.debug.x86_64 =   "res://nobodywho/nobodywho-x86_64-pc-windows-gnu-debug.dll"
+windows.release.x86_64 = "res://nobodywho/nobodywho-x86_64-pc-windows-gnu-release.dll"
+macos.debug =            "res://nobodywho/nobodywho-x86_64-apple-darwin-debug.dylib"
+macos.release =          "res://nobodywho/nobodywho-x86_64-apple-darwin-release.dylib"
+macos.debug.arm64 =      "res://nobodywho/nobodywho-aarch64-apple-darwin-debug.dylib"
+macos.release.arm64 =    "res://nobodywho/nobodywho-aarch64-apple-darwin-release.dylib"

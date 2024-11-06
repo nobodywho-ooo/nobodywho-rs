@@ -41,7 +41,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.target }}-${{ matrix.profile }}
-          path: ./nobodywho/target/${{ matrix.profile }}/libnobodywho.so
+          path: ./nobodywho-${{ matrix.target }}-${{ matrix.profile }}.so
 
 
   cargo-build-windows:
@@ -156,10 +156,13 @@ jobs:
       - name: "Download all build artifacts"
         uses: actions/download-artifact@v4
         with:
-          path: ./nobodywho-release
+          path: ./artifacts
 
-      - name: Add gdextension file
-        run: cp ./nobodywho/nobodywho.gdextension ./nobodywho-release
+      - name: "Make directory structure for release zip"
+        run: |
+          mkdir -p nobodywho-release/nobodywho
+          cp ./artifacts/*/* ./nobodywho-release/nobodywho
+          cp ./nobodywho/nobodywho.gdextension ./nobodywho-release/nobodywho
 
       - name: "Upload zipped build artifacts"
         uses: actions/upload-artifact@v4
