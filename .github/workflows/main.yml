@@ -117,7 +117,7 @@ jobs:
         working-directory: ./nobodywho
 
   zip-distributable:
-    needs: [cargo-build, cargo-build-macos]
+    needs: [cargo-build-linux, cargo-build-macos, cargo-build-windows]
     runs-on: Linux
     steps:
       - name: Download all build artifacts
