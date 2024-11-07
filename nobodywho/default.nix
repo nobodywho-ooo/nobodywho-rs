@@ -1,12 +1,12 @@
-{ rustPlatform, libclang, llvmPackages_12, stdenv, lib, cmake, vulkan-headers, vulkan-loader, shaderc }:
+{ fetchurl, rustPlatform, libclang, llvmPackages_12, stdenv, lib, cmake, vulkan-headers, vulkan-loader, vulkan-tools, shaderc, mesa }:
 
 
 rustPlatform.buildRustPackage {
   pname = "nobody";
   version = "0.0.0";
   src = ./.;
-  nativeBuildInputs = [ llvmPackages_12.bintools cmake vulkan-headers vulkan-loader shaderc ];
-  buildInputs = [ vulkan-loader vulkan-headers shaderc ];
+  nativeBuildInputs = [ llvmPackages_12.bintools cmake vulkan-headers vulkan-loader shaderc vulkan-tools mesa.drivers ];
+  buildInputs = [ vulkan-loader vulkan-headers shaderc vulkan-tools mesa.drivers ];
   cargoLock = {
     lockFile = ./Cargo.lock;
     outputHashes = {
@@ -15,6 +15,12 @@ rustPlatform.buildRustPackage {
     };
   };
   env.LIBCLANG_PATH = "${libclang.lib}/lib/libclang.so";
+  env.TEST_MODEL = fetchurl {
+    name = "gemma-2-2b-it-Q5_K_M.gguf";
+    url = "https://huggingface.co/bartowski/gemma-2-2b-it-GGUF/resolve/main/gemma-2-2b-it-Q5_K_M.gguf";
+    sha256 = "1njh254wpsg2j4wi686zabg63n42fmkgdmf9v3cl1zbydybdardy";
+  };
+
   # See: https://hoverbear.org/blog/rust-bindgen-in-nix/
   preBuild = ''
     # From: https://github.com/NixOS/nixpkgs/blob/1fab95f5190d087e66a3502481e34e15d62090aa/pkgs/applications/networking/browsers/firefox/common.nix#L247-L253
@@ -30,5 +36,9 @@ rustPlatform.buildRustPackage {
       ${lib.optionalString stdenv.cc.isGNU "-isystem ${stdenv.cc.cc}/include/c++/${lib.getVersion stdenv.cc.cc} -isystem ${stdenv.cc.cc}/include/c++/${lib.getVersion stdenv.cc.cc}/${stdenv.hostPlatform.config} -idirafter ${stdenv.cc.cc}/lib/gcc/${stdenv.hostPlatform.config}/${lib.getVersion stdenv.cc.cc}/include"} \
     "
   '';
-  doCheck = false;
+
+  checkPhase = ''
+    cargo test -- --test-threads=1 --nocapture
+  '';
+  doCheck = true;
 }
