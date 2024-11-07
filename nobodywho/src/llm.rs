@@ -23,8 +23,7 @@ pub type Model = Arc<LlamaModel>;
 
 pub fn get_model(model_path: &str) -> Arc<LlamaModel> {
     // TODO: Set the number of GPU layers
-    // let model_params = LlamaModelParams::default().with_n_gpu_layers(1000);
-    let model_params = LlamaModelParams::default();
+    let model_params = LlamaModelParams::default().with_n_gpu_layers(1000);
     let model_params = pin!(model_params);
     Arc::new(LlamaModel::load_from_file(&LLAMA_BACKEND, model_path, &model_params).unwrap())
 }
