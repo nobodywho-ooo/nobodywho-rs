@@ -21,9 +21,22 @@ pub enum LLMOutput {
 
 pub type Model = Arc<LlamaModel>;
 
+pub fn has_discrete_gpu() -> bool {
+    // Use the `wgpu` crate to enumerate GPUs,
+    // label them as CPU, Integrated GPU, and Discrete GPU
+    // and return true only if one of them is a discrete gpu.
+    // TODO: how does this act on macos?
+    wgpu::Instance::default()
+        .enumerate_adapters(wgpu::Backends::all())
+        .into_iter()
+        .any(|a| a.get_info().device_type == wgpu::DeviceType::DiscreteGpu)
+}
+
 pub fn get_model(model_path: &str) -> Arc<LlamaModel> {
-    // TODO: Set the number of GPU layers
-    let model_params = LlamaModelParams::default().with_n_gpu_layers(1000);
+    // HACK: only offload anything to the gpu if we can find a dedicated GPU
+    //       there seems to be a bug which results in garbage tokens if we over-allocate an integrated GPU
+    //       while using the vulkan backend. See: https://github.com/nobodywho-ooo/nobodywho-rs/pull/14
+    let model_params = LlamaModelParams::default().with_n_gpu_layers(if has_discrete_gpu() || cfg!(target_os = "macos") { 1000000 } else { 0 });
     let model_params = pin!(model_params);
     Arc::new(LlamaModel::load_from_file(&LLAMA_BACKEND, model_path, &model_params).unwrap())
 }
