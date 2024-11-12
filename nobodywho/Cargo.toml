@@ -11,6 +11,9 @@ encoding_rs = "0.8.34"
 godot = { git = "https://github.com/godot-rust/gdext", branch = "master", features = [
     "experimental-threads",
 ] }
-llama-cpp-2 = { version = "0.1.83", features = [ "vulkan" ] }
+llama-cpp-2 = { version = "0.1.83" }
 num_cpus = "1.16.0"
 wgpu = "23.0.0"
+
+[target.'cfg(not(target_os = "macos"))'.dependencies]
+llama-cpp-2 = { version = "0.1.83", features = ["vulkan"] }
