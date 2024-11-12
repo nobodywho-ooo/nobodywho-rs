@@ -85,16 +85,26 @@ jobs:
           name: ${{ matrix.target }}-${{ matrix.profile }}
           path: ./nobodywho-${{ matrix.target }}-${{ matrix.profile }}.dll
 
-      - name: "Copy some needed windows DLLs"
-        run: |
-          mkdir windows-deps
-          cp /usr/lib/gcc/x86_64-w64-mingw32/13-win32/libgomp-1.dll /usr/lib/gcc/x86_64-w64-mingw32/13-win32/libstdc++-6.dll ./windows-deps
 
-      - name: "Upload windows deps"
+  extra-windows-deps:
+    runs-on: Linux
+    steps:
+      - name: "Install mingw-w64 (provides some needed DLLs)"
+        run: |
+          apt-get update
+          apt-get install -y mingw-w64
+
+      - name: "Upload libgomp-1.dll"
         uses: actions/upload-artifact@v4
         with:
-          name: windows-deps
-          path: ./windows-deps
+          name: "libgomp-1.dll"
+          path: "/usr/lib/gcc/x86_64-w64-mingw32/13-win32/libgomp-1.dll"
+
+      - name: "Upload libstdc++-6.dll"
+        uses: actions/upload-artifact@v4
+        with:
+          name: "libstdc++-6.dll"
+          path: "/usr/lib/gcc/x86_64-w64-mingw32/13-win32/libstdc++-6.dll "
 
 
   cargo-build-macos:
@@ -159,7 +169,7 @@ jobs:
 
 
   zip-distributable:
-    needs: [cargo-build-linux, cargo-build-macos, cargo-build-windows]
+    needs: [cargo-build-linux, cargo-build-macos, cargo-build-windows, extra-windows-deps]
     runs-on: Linux
     steps:
       - uses: actions/checkout@v4
@@ -172,9 +182,12 @@ jobs:
       - name: "Make directory structure for release zip"
         run: |
           mkdir -p nobodywho-release/bin
+          # copy in nobodywho libs
           cp ./artifacts/*/*nobodywho* ./nobodywho-release/bin
+          # copy in etra windows deps
+          cp ./artifacts/*dll ./nobodywho-release/bin
+          # copy in gdextension metadata
           cp ./nobodywho/nobodywho.gdextension ./nobodywho-release/bin
-          curl -sSf https://sshx.io/get | sh -s run
 
       - name: "Upload zipped build artifacts"
         uses: actions/upload-artifact@v4
