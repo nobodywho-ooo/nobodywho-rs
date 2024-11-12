@@ -160,9 +160,9 @@ jobs:
 
       - name: "Make directory structure for release zip"
         run: |
-          mkdir -p nobodywho-release/nobodywho
-          cp ./artifacts/*/* ./nobodywho-release/nobodywho
-          cp ./nobodywho/nobodywho.gdextension ./nobodywho-release/nobodywho
+          mkdir -p nobodywho-release/bin
+          cp ./artifacts/*/* ./nobodywho-release/bin
+          cp ./nobodywho/nobodywho.gdextension ./nobodywho-release/bin
 
       - name: "Upload zipped build artifacts"
         uses: actions/upload-artifact@v4
