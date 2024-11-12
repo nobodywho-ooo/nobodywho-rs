@@ -93,18 +93,14 @@ jobs:
         run: |
           apt-get update
           apt-get install -y mingw-w64
+          mkdir ./extra-windows-deps
+          cp "/usr/lib/gcc/x86_64-w64-mingw32/13-win32/libgomp-1.dll" "/usr/lib/gcc/x86_64-w64-mingw32/13-win32/libstdc++-6.dll" "./extra-windows-deps"
 
-      - name: "Upload libgomp-1.dll"
+      - name: "Upload extra-windows-deps"
         uses: actions/upload-artifact@v4
         with:
-          name: "libgomp-1.dll"
-          path: "/usr/lib/gcc/x86_64-w64-mingw32/13-win32/libgomp-1.dll"
-
-      - name: "Upload libstdc++-6.dll"
-        uses: actions/upload-artifact@v4
-        with:
-          name: "libstdc++-6.dll"
-          path: "/usr/lib/gcc/x86_64-w64-mingw32/13-win32/libstdc++-6.dll "
+          name: "extra-windows-deps"
+          path: "./extra-windows-deps"
 
 
   cargo-build-macos:
@@ -183,11 +179,11 @@ jobs:
         run: |
           mkdir -p nobodywho-release/bin
           # copy in nobodywho libs
-          cp ./artifacts/*/*nobodywho* ./nobodywho-release/bin
+          cp ./artifacts/*/*nobodywho* ./nobodywho-release/bin/
           # copy in etra windows deps
-          cp ./artifacts/*dll ./nobodywho-release/bin
+          cp ./artifacts/extra-windows-deps/*dll ./nobodywho-release/bin/
           # copy in gdextension metadata
-          cp ./nobodywho/nobodywho.gdextension ./nobodywho-release/bin
+          cp ./nobodywho/nobodywho.gdextension ./nobodywho-release/bin/
 
       - name: "Upload zipped build artifacts"
         uses: actions/upload-artifact@v4
