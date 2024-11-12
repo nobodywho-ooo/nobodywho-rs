@@ -6,8 +6,8 @@ reloadable = true
 [libraries]
 linux.debug.x86_64 =     "res://../nobodywho/target/debug/libnobodywho.so"
 linux.release.x86_64 =   "res://../nobodywho/target/release/libnobodywho.so"
-windows.debug.x86_64 =   "res://../nobodywho/target/debug/nobodywho.dll"
-windows.release.x86_64 = "res://../nobodywho/target/release/nobodywho.dll"
+windows.debug.x86_64 =   "res://../nobodywho/target/debug/nobody.dll"
+windows.release.x86_64 = "res://../nobodywho/target/release/nobody.dll"
 macos.debug =            "res://../nobodywho/target/debug/libnobodywho.dylib"
 macos.release =          "res://../nobodywho/target/release/libnobodywho.dylib"
 macos.debug.arm64 =      "res://../nobodywho/target/debug/libnobodywho.dylib"
