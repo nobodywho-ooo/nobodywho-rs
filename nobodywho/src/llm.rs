@@ -66,8 +66,7 @@ pub fn get_model(
         LlamaModel::load_from_file(&LLAMA_BACKEND, model_path, &model_params).map_err(|e| {
             LoadModelError::InvalidModel(format!(
                 "Bad model path: {} - Llama.cpp error: {}",
-                model_path,
-                e
+                model_path, e
             ))
         })?;
     Ok(Arc::new(model))
@@ -161,23 +160,30 @@ pub enum WorkerError {
     SendError, // this is actually a SendError<LLMOutput>, but that becomes recursive and weord.
 }
 
-pub fn run_worker(
+pub fn run_completion_worker(
     model: Arc<LlamaModel>,
     message_rx: Receiver<String>,
     completion_tx: Sender<LLMOutput>,
     sampler_config: SamplerConfig,
     n_ctx: u32,
-    system_prompt: String
+    system_prompt: String,
 ) {
     // this function is a pretty thin wrapper to send back an `Err` if we get it
-    if let Err(msg) = run_worker_result(model, message_rx, &completion_tx, sampler_config, n_ctx, system_prompt) {
+    if let Err(msg) = run_completion_worker_result(
+        model,
+        message_rx,
+        &completion_tx,
+        sampler_config,
+        n_ctx,
+        system_prompt,
+    ) {
         completion_tx
             .send(LLMOutput::FatalErr(msg))
             .expect("Could not send llm worker fatal error back to consumer.");
     }
 }
 
-fn run_worker_result(
+fn run_completion_worker_result(
     model: Arc<LlamaModel>,
     message_rx: Receiver<String>,
     completion_tx: &Sender<LLMOutput>,
@@ -287,6 +293,58 @@ fn run_worker_result(
     unreachable!();
 }
 
+pub enum EmbeddingsOutput {
+    Embedding(Vec<f32>),
+    FatalErr(WorkerError),
+}
+
+pub fn run_embedding_worker(
+    model: Arc<LlamaModel>,
+    prompt_rx: Receiver<String>,
+    embeddings_tx: Sender<EmbeddingsOutput>,
+) {
+    // this function is a pretty thin wrapper to send back an `Err` if we get it
+    if let Err(msg) = run_embedding_worker_result(model, prompt_rx, &embeddings_tx) {
+        embeddings_tx
+            .send(EmbeddingsOutput::FatalErr(msg))
+            .expect("Could not send llm worker fatal error back to consumer.");
+    }
+}
+
+pub fn run_embedding_worker_result(
+    model: Arc<LlamaModel>,
+    prompt_rx: Receiver<String>,
+    embeddings_tx: &Sender<EmbeddingsOutput>,
+) -> Result<(), WorkerError> {
+    let n_threads = std::thread::available_parallelism()?.get() as i32;
+    let ctx_params = LlamaContextParams::default()
+        .with_n_threads(n_threads)
+        .with_embeddings(true);
+
+    let mut ctx = model.new_context(&LLAMA_BACKEND, ctx_params)?;
+
+    while let Ok(prompt) = prompt_rx.recv() {
+        let mut batch = LlamaBatch::new(ctx.n_ctx() as usize, 1);
+
+        let tokens_list = ctx.model.str_to_token(&prompt, AddBos::Always)?;
+
+        batch
+            .add_sequence(&tokens_list, 0, false)
+            .expect("Failed to add sequence");
+
+        ctx.clear_kv_cache();
+
+        ctx.decode(&mut batch)?;
+
+        let embedding = ctx.embeddings_seq_ith(0).unwrap().to_vec();
+
+        embeddings_tx
+            .send(EmbeddingsOutput::Embedding(embedding))
+            .map_err(|_| WorkerError::SendError)?;
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -299,7 +357,6 @@ mod tests {
         };
     }
 
-
     #[test]
     fn test_chat_completion() {
         let model = get_model(test_model_path!(), true).unwrap();
@@ -308,14 +365,25 @@ mod tests {
         let (completion_tx, completion_rx) = std::sync::mpsc::channel();
 
         let system_prompt = "You are a helpful assistant. The user asks you a question, and you provide an answer. You take multiple turns to provide the answer. Be consice and only provide the answer".to_string();
-        std::thread::spawn(|| run_worker(model, prompt_rx, completion_tx, DEFAULT_SAMPLER_CONFIG, 4096, system_prompt));
+        std::thread::spawn(|| {
+            run_worker(
+                model,
+                prompt_rx,
+                completion_tx,
+                DEFAULT_SAMPLER_CONFIG,
+                4096,
+                system_prompt,
+            )
+        });
 
-        prompt_tx.send("What is the capital of Denmark?".to_string()).unwrap();
+        prompt_tx
+            .send("What is the capital of Denmark?".to_string())
+            .unwrap();
 
         let result: String;
         loop {
             match completion_rx.recv() {
-                Ok(LLMOutput::Token(_)) => {},
+                Ok(LLMOutput::Token(_)) => {}
                 Ok(LLMOutput::Done(response)) => {
                     result = response;
                     break;
@@ -328,11 +396,13 @@ mod tests {
             "Expected completion to contain 'Copenhagen', got: {result}"
         );
 
-        prompt_tx.send("What language to they speak there?".to_string()).unwrap();
+        prompt_tx
+            .send("What language to they speak there?".to_string())
+            .unwrap();
         let result: String;
         loop {
             match completion_rx.recv() {
-                Ok(LLMOutput::Token(_)) => {},
+                Ok(LLMOutput::Token(_)) => {}
                 Ok(LLMOutput::Done(response)) => {
                     result = response;
                     break;
