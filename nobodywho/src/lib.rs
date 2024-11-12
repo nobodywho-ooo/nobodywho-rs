@@ -3,7 +3,7 @@ mod llm;
 
 use godot::classes::{INode, ProjectSettings};
 use godot::prelude::*;
-use llm::run_worker;
+use llm::{run_completion_worker, run_embedding_worker};
 use std::sync::mpsc::{Receiver, Sender};
 
 struct NobodyWhoExtension;
@@ -149,12 +149,11 @@ macro_rules! run_model {
             // start the llm worker
             let n_ctx = $self.context_length;
             std::thread::spawn(move || {
-                run_worker(model, prompt_rx, completion_tx, sampler_config, n_ctx);
+                run_completion_worker(model, prompt_rx, completion_tx, sampler_config, n_ctx);
             });
 
             Ok(())
         };
-
         // run it and show error in godot if it fails
         if let Err(msg) = run_result() {
             godot_error!("Error running model: {}", msg);
@@ -350,4 +349,83 @@ impl NobodyWhoPromptChat {
 
     #[signal]
     fn completion_finished();
+}
+
+#[derive(GodotClass)]
+#[class(base=Node)]
+struct NobodyWhoEmbedding {
+    #[export]
+    model_node: Option<Gd<NobodyWhoModel>>,
+
+    prompt_tx: Option<Sender<String>>,
+    embeddings_rx: Option<Receiver<llm::EmbeddingsOutput>>,
+
+    base: Base<Node>,
+}
+
+#[godot_api]
+impl INode for NobodyWhoEmbedding {
+    fn init(base: Base<Node>) -> Self {
+        Self {
+            model_node: None,
+            prompt_tx: None,
+            embeddings_rx: None,
+            base,
+        }
+    }
+
+    fn physics_process(&mut self, _delta: f64) {
+        loop {
+            if let Some(rx) = self.embeddings_rx.as_ref() {
+                match rx.try_recv() {
+                    Ok(llm::EmbeddingsOutput::Embedding(embedding)) => {
+                        self.base_mut()
+                            .emit_signal("embedding_finished", &[Variant::from(embedding)]);
+                    }
+                    Ok(llm::EmbeddingsOutput::FatalErr(msg)) => {
+                        godot_error!("Embeddings worker crashed: {msg}");
+                    }
+                    Err(std::sync::mpsc::TryRecvError::Empty) => {
+                        break;
+                    }
+                    Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                        godot_error!("Unexpected: Model channel disconnected");
+                    }
+                }
+            } else {
+                break;
+            }
+        }
+    }
+}
+
+#[godot_api]
+impl NobodyWhoEmbedding {
+    #[func]
+    fn run(&mut self) {
+        let gd_model_node = self.model_node.as_mut().expect("Model node is not set.");
+        let nobody_model: GdRef<NobodyWhoModel> = gd_model_node.bind();
+        let model: llm::Model = nobody_model
+            .model
+            .clone()
+            .expect("Could not access NobodyWhoModel.");
+
+        // make and store channels for communicating with the llm worker thread
+        let (prompt_tx, prompt_rx) = std::sync::mpsc::channel();
+        let (embeddings_tx, embeddings_rx) = std::sync::mpsc::channel();
+        self.prompt_tx = Some(prompt_tx);
+        self.embeddings_rx = Some(embeddings_rx);
+
+        std::thread::spawn(move || {
+            run_embedding_worker(model, prompt_rx, embeddings_tx);
+        });
+    }
+
+    #[func]
+    fn embed(&mut self, text: String) {
+        send_text!(self, text)
+    }
+
+    #[signal]
+    fn embedding_finished();
 }
