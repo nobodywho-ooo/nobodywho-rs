@@ -2,13 +2,17 @@
 
 [ext_resource type="Script" path="res://nobody_who_db.gd" id="2_qeomc"]
 [ext_resource type="Script" path="res://nobody_who_prompt_chat.gd" id="2_r1dk7"]
+[ext_resource type="Script" path="res://nobody_who_embedding.gd" id="2_sr1os"]
 
 [sub_resource type="NobodyWhoSampler" id="NobodyWhoSampler_djbpq"]
 
 [node name="World" type="Node2D"]
 
-[node name="NobodyWhoModel" type="NobodyWhoModel" parent="."]
-model_path = "res://model.gguf"
+[node name="CompletionModel" type="NobodyWhoModel" parent="."]
+model_path = "res://Llama-3.2-1B-Instruct-f16.gguf"
+
+[node name="EmbeddingModel" type="NobodyWhoModel" parent="."]
+model_path = "res://bge-small-en-v1.5.Q4_K_M.gguf"
 
 [node name="NobodyWhoChat" type="NobodyWhoChat" parent="." node_paths=PackedStringArray("model_node")]
 model_node = NodePath("../NobodyWhoModel")
@@ -18,8 +22,14 @@ You are speaking to bob, the adventurer.
 Bob the Adventurer's full name is \"Robert Mortimer Vanderfuck\""
 script = ExtResource("2_r1dk7")
 
+
 [node name="NobodyWhoDB" type="NobodyWhoDB" parent="."]
 script = ExtResource("2_qeomc")
 
 [connection signal="response_finished" from="NobodyWhoChat" to="NobodyWhoChat" method="_on_response_finished"]
 [connection signal="response_updated" from="NobodyWhoChat" to="NobodyWhoChat" method="_on_response_updated"]
+[node name="NobodyWhoEmbedding" type="NobodyWhoEmbedding" parent="." node_paths=PackedStringArray("model_node")]
+model_node = NodePath("../EmbeddingModel")
+script = ExtResource("2_sr1os")
+
+[connection signal="embedding_finished" from="NobodyWhoEmbedding" to="NobodyWhoEmbedding" method="_on_embedding_finished"]
