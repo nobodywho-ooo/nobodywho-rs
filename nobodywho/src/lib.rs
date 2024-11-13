@@ -422,8 +422,13 @@ impl NobodyWhoEmbedding {
     }
 
     #[func]
-    fn embed(&mut self, text: String) {
-        send_text!(self, text)
+    fn embed(&mut self, text: String) -> Signal {
+        send_text!(self, text);
+        // returns signal, so that this you can `var vec = await embed("Hello, world!")`
+        godot::builtin::Signal::from_object_signal(
+            &self.base_mut(),
+            "embedding_finished".to_string(),
+        )
     }
 
     #[signal]
