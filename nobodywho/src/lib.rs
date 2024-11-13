@@ -352,7 +352,7 @@ impl NobodyWhoEmbedding {
     }
 
     #[func]
-    fn embed(&mut self, text: String) {
+    fn embed(&mut self, text: String) -> Signal {
         // this is (largely) copied from NobodyWhoChat
         if let Some(tx) = self.prompt_tx.as_ref() {
             tx.send(text).unwrap();
@@ -361,6 +361,8 @@ impl NobodyWhoEmbedding {
             self.start_worker();
             self.embed(text);
         }
+        // returns signal, so that this you can `var vec = await embed("Hello, world!")`
+        godot::builtin::Signal::from_object_signal(&self.base_mut(), "embedding_finished")
     }
 
     #[signal]
