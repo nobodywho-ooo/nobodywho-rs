@@ -94,7 +94,10 @@ jobs:
           apt-get update
           apt-get install -y mingw-w64
           mkdir -p ./extra-windows-deps
-          cp "/usr/lib/gcc/x86_64-w64-mingw32/13-win32/libgomp-1.dll" "/usr/lib/gcc/x86_64-w64-mingw32/13-win32/libstdc++-6.dll" "./extra-windows-deps"
+          cp "/usr/lib/gcc/x86_64-w64-mingw32/13-win32/libgomp-1.dll" "./extra-windows-deps"
+          cp "/usr/lib/gcc/x86_64-w64-mingw32/13-win32/libstdc++-6.dll" "./extra-windows-deps"
+          cp "/usr/lib/gcc/x86_64-w64-mingw32/13-win32/libgcc_s_seh-1.dll" "./extra-windows-deps"
+          cp "/usr/x86_64-w64-mingw32/lib/libwinpthread-1.dll" "./extra-windows-deps"
 
       - name: "Upload extra-windows-deps"
         uses: actions/upload-artifact@v4
