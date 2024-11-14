@@ -69,7 +69,7 @@ jobs:
       - name: "Install deps from distro"
         run: |
           apt-get update
-          apt-get install -y libclang-dev cmake mingw-w64
+          apt-get install -y libclang-dev cmake mingw-w64 libshaderc-dev libvulkan-dev glslc
 
       - name: "Compile for windows"
         # HACK: C_INCLUDE_PATH specified manually here, because it can't find stdbool.h otherwise
