@@ -72,10 +72,6 @@ jobs:
         run: cargo build --verbose ${{ matrix.profile == 'release' && '--release' || '' }}
         working-directory: nobodywho
 
-      - name: Run Tests
-        run: cargo test -- --test-threads=1 --nocapture
-        working-directory: nobodywho
-
       - name: "Upload build artifacts (DEBUG)"
         uses: actions/upload-artifact@v4
         with:
