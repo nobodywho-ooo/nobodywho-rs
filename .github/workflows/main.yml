@@ -28,7 +28,6 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y libclang-dev cmake libshaderc-dev libvulkan-dev glslc
-          sudo apt-get install -y libclang-dev cmake
 
       - name: "Compile for linux"
         run: cargo build --verbose ${{ matrix.profile == 'release' && '--release' || '' }}
@@ -43,6 +42,44 @@ jobs:
           name: ${{ matrix.target }}-${{ matrix.profile }}
           path: ./nobodywho-${{ matrix.target }}-${{ matrix.profile }}.so
 
+  cargo-build-windows-on-windows:
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        profile:
+          - "debug"
+          - "release"
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          target: x86_64-pc-windows-msvc
+
+      - name: Install Vulkan SDK
+        run: |
+          Invoke-WebRequest -Uri "https://sdk.lunarg.com/sdk/download/1.3.296.0/windows/VulkanSDK-1.3.296.0-Installer.exe" -OutFile "vulkan_sdk.exe"
+          Start-Process "vulkan_sdk.exe" -ArgumentList "/S" -Wait
+          $sdkPath = "C:\VulkanSDK\1.3.296.0"
+          echo "VULKAN_SDK=$sdkPath" | Out-File -FilePath "$env:GITHUB_ENV" -Encoding utf8
+
+      - name: Build with Cargo
+        run: cargo build --verbose ${{ matrix.profile == 'release' && '--release' || '' }}
+        working-directory: nobodywho
+
+      - name: Run Tests
+        run: cargo test -- --test-threads=1 --nocapture
+        working-directory: nobodywho
+
+      - name: "Upload build artifacts (DEBUG)"
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.target }}-${{ matrix.profile }}
+          path: ./nobodywho/target
 
   cargo-build-windows:
     runs-on: Linux
@@ -163,7 +200,7 @@ jobs:
         run: wget "https://huggingface.co/bartowski/gemma-2-2b-it-GGUF/resolve/main/gemma-2-2b-it-Q5_K_M.gguf" -O ./nobodywho/model.bin
 
       - name: "Run unit tests"
-        run: cargo test -- --nocapture
+        run: cargo test -- --nocapture --test-threads=1
         working-directory: ./nobodywho
 
 
