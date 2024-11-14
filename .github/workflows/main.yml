@@ -74,11 +74,14 @@ jobs:
         run: cargo build --verbose ${{ matrix.profile == 'release' && '--release' || '' }}
         working-directory: nobodywho
 
-      - name: "Upload build artifacts (DEBUG)"
+      - name: "Rename built file"
+        run: cp ./nobodywho/target/${{ matrix.profile }}/nobodywho.dll ./nobodywho-${{ matrix.target }}-${{ matrix.profile }}.dll
+
+      - name: "Upload build artifacts"
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.target }}-${{ matrix.profile }}
-          path: ./nobodywho/target
+          path: ./nobodywho-${{ matrix.target }}-${{ matrix.profile }}.dll
 
   cargo-build-windows-on-linux:
     runs-on: Linux
