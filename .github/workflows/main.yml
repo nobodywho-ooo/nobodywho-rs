@@ -135,7 +135,7 @@ jobs:
       - name: "Install deps from distro"
         run: |
           sudo apt-get update
-          sudo apt-get install -y libclang-dev cmake libshaderc-dev libvulkan-dev glslc
+          sudo apt-get install -y libclang-dev cmake libshaderc-dev libvulkan-dev glslc mesa-vulkan-drivers
 
       - name: "Download test model"
         run: wget "https://huggingface.co/bartowski/gemma-2-2b-it-GGUF/resolve/main/gemma-2-2b-it-Q5_K_M.gguf" -O ./nobodywho/model.bin
