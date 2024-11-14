@@ -42,11 +42,13 @@ jobs:
           name: ${{ matrix.target }}-${{ matrix.profile }}
           path: ./nobodywho-${{ matrix.target }}-${{ matrix.profile }}.so
 
-  cargo-build-windows-on-windows:
+  cargo-build-windows:
     runs-on: windows-latest
     strategy:
       fail-fast: false
       matrix:
+        target:
+          - "x86_64-pc-windows-msvc"
         profile:
           - "debug"
           - "release"
@@ -58,7 +60,7 @@ jobs:
         uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
-          target: x86_64-pc-windows-msvc
+          target: ${{ matrix.target }}
 
       - name: Install Vulkan SDK
         uses: jakoch/install-vulkan-sdk-action@v1.0.0
@@ -75,10 +77,10 @@ jobs:
       - name: "Upload build artifacts (DEBUG)"
         uses: actions/upload-artifact@v4
         with:
-          name: windows-${{ matrix.profile }}
+          name: ${{ matrix.target }}-${{ matrix.profile }}
           path: ./nobodywho/target
 
-  cargo-build-windows:
+  cargo-build-windows-on-linux:
     runs-on: Linux
     strategy:
       fail-fast: false
@@ -202,7 +204,7 @@ jobs:
 
 
   zip-distributable:
-    needs: [cargo-build-linux, cargo-build-macos, cargo-build-windows, extra-windows-deps]
+    needs: [cargo-build-linux, cargo-build-macos, cargo-build-windows]
     runs-on: Linux
     steps:
       - uses: actions/checkout@v4
@@ -217,8 +219,6 @@ jobs:
           mkdir -p nobodywho-release/bin
           # copy in nobodywho libs
           cp ./artifacts/*/*nobodywho* ./nobodywho-release/bin/
-          # copy in etra windows deps
-          cp ./artifacts/extra-windows-deps/*dll ./nobodywho-release/bin/
           # copy in gdextension metadata
           cp ./nobodywho/nobodywho.gdextension ./nobodywho-release/bin/
 
