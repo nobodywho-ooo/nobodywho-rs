@@ -11,22 +11,10 @@ impl ToSql for SqlVariant {
     fn to_sql(&self) -> Result<ToSqlOutput<'_>, Error> {
         match self.0.get_type() {
             VariantType::NIL => Ok(ToSqlOutput::Owned(Value::Null)),
-            VariantType::BOOL => {
-                let val: bool = self.0.to();
-                Ok(ToSqlOutput::from(val))
-            }
-            VariantType::INT => {
-                let val: i64 = self.0.to();
-                Ok(ToSqlOutput::from(val))
-            }
-            VariantType::FLOAT => {
-                let val: f64 = self.0.to();
-                Ok(ToSqlOutput::from(val))
-            }
-            VariantType::STRING => {
-                let val: String = self.0.to();
-                Ok(ToSqlOutput::from(val))
-            }
+            VariantType::BOOL => Ok(ToSqlOutput::from(self.0.to::<bool>())),
+            VariantType::INT => Ok(ToSqlOutput::from(self.0.to::<i64>())),
+            VariantType::FLOAT => Ok(ToSqlOutput::from(self.0.to::<f64>())),
+            VariantType::STRING => Ok(ToSqlOutput::from(self.0.to::<String>())),
             _ => Err(Error::ToSqlConversionFailure(Box::new(
                 std::io::Error::new(
                     std::io::ErrorKind::InvalidData,
@@ -101,7 +89,6 @@ impl NobodyWhoDB {
         let params: Vec<SqlVariant> = params.iter_shared().map(SqlVariant).collect();
 
         let column_count = stmt.column_count();
-
         let mut rows = stmt
             .query(params_from_iter(params))
             .expect("Failed to execute query.");
