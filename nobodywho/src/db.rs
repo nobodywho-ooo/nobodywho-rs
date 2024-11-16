@@ -17,6 +17,7 @@ impl ToSql for SqlVariant {
             VariantType::INT => Ok(ToSqlOutput::from(self.0.to::<i64>())),
             VariantType::FLOAT => Ok(ToSqlOutput::from(self.0.to::<f64>())),
             VariantType::STRING => Ok(ToSqlOutput::from(self.0.to::<String>())),
+            VariantType::PACKED_BYTE_ARRAY => Ok(ToSqlOutput::from(self.0.to::<Vec<u8>>())),
             _ => Err(Error::ToSqlConversionFailure(Box::new(
                 std::io::Error::new(
                     std::io::ErrorKind::InvalidData,
@@ -109,7 +110,7 @@ impl NobodyWhoDB {
                     Value::Integer(i) => i.to_variant(),
                     Value::Real(f) => f.to_variant(),
                     Value::Text(s) => s.to_variant(),
-                    Value::Blob(_) => unimplemented!(),
+                    Value::Blob(b) => PackedByteArray::from(b).to_variant(),
                 };
                 row_data.push(value);
             }
