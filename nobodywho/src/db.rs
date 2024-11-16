@@ -17,7 +17,13 @@ impl ToSql for SqlVariant {
             VariantType::INT => Ok(ToSqlOutput::from(self.0.to::<i64>())),
             VariantType::FLOAT => Ok(ToSqlOutput::from(self.0.to::<f64>())),
             VariantType::STRING => Ok(ToSqlOutput::from(self.0.to::<String>())),
-            VariantType::PACKED_BYTE_ARRAY => Ok(ToSqlOutput::from(self.0.to::<Vec<u8>>())),
+            VariantType::PACKED_BYTE_ARRAY => {
+                Ok(ToSqlOutput::from(self.0.to::<PackedByteArray>().to_vec()))
+            }
+            VariantType::PACKED_FLOAT32_ARRAY => Ok(ToSqlOutput::from(
+                self.0.to::<PackedFloat32Array>().to_byte_array().to_vec(),
+            )),
+
             _ => Err(Error::ToSqlConversionFailure(Box::new(
                 std::io::Error::new(
                     std::io::ErrorKind::InvalidData,
@@ -105,7 +111,7 @@ impl NobodyWhoDB {
             let mut row_data = VariantArray::new();
 
             for i in 0..column_count {
-                let value: Variant = match row.get_unwrap(i) {
+                let value = match row.get_unwrap(i) {
                     Value::Null => Variant::nil(),
                     Value::Integer(i) => i.to_variant(),
                     Value::Real(f) => f.to_variant(),
