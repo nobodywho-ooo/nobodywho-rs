@@ -1,7 +1,7 @@
-use godot::prelude::{Variant, VariantType};
+use godot::prelude::*;
 use rusqlite::{
     types::{ToSql, ToSqlOutput, Value},
-    Error,
+    Connection, Error,
 };
 
 pub struct SqlVariant(pub Variant);
@@ -32,6 +32,26 @@ impl ToSql for SqlVariant {
                     "Unsupported Variant type for SQL conversion",
                 ),
             ))),
+        }
+    }
+}
+
+#[derive(GodotClass)]
+#[class(base=Node)]
+pub struct NobodyWhoDB {
+    #[export(file = "*.db")]
+    db_path: GString,
+    conn: Option<Connection>,
+    base: Base<Node>,
+}
+
+#[godot_api]
+impl INode for NobodyWhoDB {
+    fn init(base: Base<Node>) -> Self {
+        Self {
+            db_path: ":memory:".into(), // Default value in Godot editor
+            conn: None,
+            base,
         }
     }
 }
