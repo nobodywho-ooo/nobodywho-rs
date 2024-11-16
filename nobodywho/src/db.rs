@@ -1,9 +1,11 @@
 use godot::prelude::*;
 use rusqlite::{
+    ffi::sqlite3_auto_extension,
     params_from_iter,
     types::{ToSql, ToSqlOutput, Value},
-    Connection, Error,
+    Connection, Error, Result,
 };
+use sqlite_vec::sqlite3_vec_init;
 
 pub struct SqlVariant(pub Variant);
 
@@ -49,6 +51,10 @@ impl INode for NobodyWhoDB {
 impl NobodyWhoDB {
     #[func]
     fn open_db(&mut self) {
+        unsafe {
+            sqlite3_auto_extension(Some(std::mem::transmute(sqlite3_vec_init as *const ())));
+        }
+
         if let Ok(conn) = Connection::open(self.db_path.to_string()) {
             self.conn = Some(conn);
         }

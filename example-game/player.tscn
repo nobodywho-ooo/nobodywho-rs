@@ -1,5 +1,6 @@
-[gd_scene load_steps=2 format=3 uid="uid://breb76ad7m6xn"]
+[gd_scene load_steps=3 format=3 uid="uid://breb76ad7m6xn"]
 
+[ext_resource type="Script" path="res://nobody_who_db.gd" id="2_qeomc"]
 [ext_resource type="Script" path="res://nobody_who_prompt_chat.gd" id="2_r1dk7"]
 
 [node name="NobodyWhoPromptCompletion" type="Node2D"]
@@ -13,6 +14,9 @@ prompt = "You are a powerful wizard who always tries to cast spells to turn peop
 You are speaking to bob, the adventurer.
 Bob the Adventurer's full name is \"Robert Mortimer Vanderfuck\""
 script = ExtResource("2_r1dk7")
+
+[node name="NobodyWhoDB" type="NobodyWhoDB" parent="."]
+script = ExtResource("2_qeomc")
 
 [connection signal="completion_finished" from="NobodyWhoPromptChat" to="NobodyWhoPromptChat" method="_on_completion_finished"]
 [connection signal="completion_updated" from="NobodyWhoPromptChat" to="NobodyWhoPromptChat" method="_on_completion_updated"]
