@@ -294,8 +294,10 @@ impl INode for NobodyWhoEmbedding {
             if let Some(rx) = self.embeddings_rx.as_ref() {
                 match rx.try_recv() {
                     Ok(llm::EmbeddingsOutput::Embedding(embedding)) => {
-                        self.base_mut()
-                            .emit_signal("embedding_finished", &[Variant::from(embedding)]);
+                        self.base_mut().emit_signal(
+                            "embedding_finished",
+                            &[PackedFloat32Array::from(embedding).to_variant()],
+                        );
                     }
                     Ok(llm::EmbeddingsOutput::FatalErr(msg)) => {
                         godot_error!("Embeddings worker crashed: {msg}");
