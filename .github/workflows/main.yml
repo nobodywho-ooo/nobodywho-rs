@@ -184,9 +184,13 @@ jobs:
           name: nobodywho-all-platforms
           path: ./nobodywho-release
 
+      - name: "Make zip file"
+        run: |
+          zip -r "nobodywho-${GITHUB_REF#refs/tags/}.zip" ./nobodywho-release/**
+
       - name: "Create GitHub Release"
         uses: softprops/action-gh-release@v1
         with:
-          files: ./nobodywho-release/**
+          files: "./nobodywho-${GITHUB_REF#refs/tags/}.zip"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
