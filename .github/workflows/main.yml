@@ -49,7 +49,6 @@ jobs:
       matrix:
         target:
           - "x86_64-pc-windows-msvc"
-          - "x86_64-pc-windows-gnu"
         profile:
           - "debug"
           - "release"
