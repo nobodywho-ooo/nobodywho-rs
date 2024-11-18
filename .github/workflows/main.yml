@@ -2,6 +2,8 @@ name: "Build and test"
 on:
   pull_request:
   push:
+permissions:
+  contents: write
 jobs:
   cargo-build-linux:
     runs-on: ubuntu-24.04
