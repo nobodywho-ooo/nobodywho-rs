@@ -6,7 +6,6 @@ reloadable = true
 [libraries]
 linux.debug.x86_64 =     "res://bin/nobodywho-x86_64-unknown-linux-gnu-debug.so"
 linux.release.x86_64 =   "res://bin/nobodywho-x86_64-unknown-linux-gnu-release.so"
-windows.debug.x86_64 =   "res://bin/nobodywho-x86_64-pc-windows-msvc-debug.dll"
 windows.release.x86_64 = "res://bin/nobodywho-x86_64-pc-windows-msvc-release.dll"
 macos.debug =            "res://bin/nobodywho-x86_64-apple-darwin-debug.dylib"
 macos.release =          "res://bin/nobodywho-x86_64-apple-darwin-release.dylib"

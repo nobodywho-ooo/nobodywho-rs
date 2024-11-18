@@ -71,10 +71,7 @@ jobs:
           stripdown: true
 
       - name: Build with Cargo
-        # HACK: both debug and release builds on windows are built with cargo `--release`
-        #       because when building with msvc, it starts depending on some visual studio debug dlls
-        #       cargo has options for statically linking these, but I don't think it works with dynamic libraries..
-        run: cargo build --verbose --target ${{ matrix.target }} --release
+        run: cargo build --verbose --target ${{ matrix.target }} ${{ matrix.profile == 'release' && '--release' || '' }}
         working-directory: nobodywho
 
       - name: "Rename built file"
