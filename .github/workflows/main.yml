@@ -49,6 +49,7 @@ jobs:
       matrix:
         target:
           - "x86_64-pc-windows-msvc"
+          - "x86_64-pc-windows-gnu"
         profile:
           - "debug"
           - "release"
@@ -71,7 +72,7 @@ jobs:
           stripdown: true
 
       - name: Build with Cargo
-        run: cargo build --verbose ${{ matrix.profile == 'release' && '--release' || '' }}
+        run: cargo build --verbose --target ${{ matrix.target }} ${{ matrix.profile == 'release' && '--release' || '' }}
         working-directory: nobodywho
 
       - name: "Rename built file"
