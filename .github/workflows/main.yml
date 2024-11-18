@@ -78,7 +78,7 @@ jobs:
         working-directory: nobodywho
 
       - name: "Rename built file"
-        run: cp ./nobodywho/target/${{ matrix.target }}/${{ matrix.profile }}/nobodywho.dll ./nobodywho-${{ matrix.target }}-${{ matrix.profile }}.dll
+        run: cp ./nobodywho/target/${{ matrix.target }}/release/nobodywho.dll ./nobodywho-${{ matrix.target }}-${{ matrix.profile }}.dll
 
       - name: "Upload build artifacts"
         uses: actions/upload-artifact@v4
