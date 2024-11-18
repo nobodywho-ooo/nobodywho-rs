@@ -3,47 +3,169 @@ on:
   pull_request:
   push:
 jobs:
-  cargo-build:
-    runs-on: Linux
+  cargo-build-linux:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - "x86_64-unknown-linux-gnu"
+        profile:
+          - "debug"
+          - "release"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: "Setup rust toolchain"
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+          . "$HOME/.cargo/env"
+          rustup update stable
+          rustup default stable
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+
+      - name: "Install distro dependencies"
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libclang-dev cmake libshaderc-dev libvulkan-dev glslc
+
+      - name: "Compile for linux"
+        run: cargo build --verbose ${{ matrix.profile == 'release' && '--release' || '' }}
+        working-directory: ./nobodywho
+
+      - name: "Rename built file"
+        run: cp ./nobodywho/target/${{ matrix.profile }}/libnobodywho.so ./nobodywho-${{ matrix.target }}-${{ matrix.profile }}.so
+
+      - name: "Upload build artifact"
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.target }}-${{ matrix.profile }}
+          path: ./nobodywho-${{ matrix.target }}-${{ matrix.profile }}.so
+
+  cargo-build-windows:
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - "x86_64-pc-windows-msvc"
+        profile:
+          - "debug"
+          - "release"
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          target: ${{ matrix.target }}
+
+      - name: Install Vulkan SDK
+        uses: jakoch/install-vulkan-sdk-action@v1.0.0
+        with:
+          vulkan_version: 1.3.296.0
+          install_runtime: true
+          cache: true
+          stripdown: true
+
+      - name: Build with Cargo
+        run: cargo build --verbose --target ${{ matrix.target }} ${{ matrix.profile == 'release' && '--release' || '' }}
+        working-directory: nobodywho
+
+      - name: "Rename built file"
+        run: cp ./nobodywho/target/${{ matrix.target }}/${{ matrix.profile }}/nobodywho.dll ./nobodywho-${{ matrix.target }}-${{ matrix.profile }}.dll
+
+      - name: "Upload build artifacts"
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.target }}-${{ matrix.profile }}
+          path: ./nobodywho-${{ matrix.target }}-${{ matrix.profile }}.dll
+
+
+  cargo-build-macos:
+    runs-on: macos-15
     strategy:
       fail-fast: false
       matrix:
         target: 
-          - "x86_64-pc-windows-gnu"
-          - "x86_64-unknown-linux-gnu"
-        toolchain:
-          - "stable"
+          - "x86_64-apple-darwin"
+          - "aarch64-apple-darwin"
+        profile:
+          - "debug"
+          - "release"
     steps:
       - uses: actions/checkout@v4
       - run: |
           curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
           . "$HOME/.cargo/env"
-          rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
+          rustup update stable
+          rustup default stable
           rustup target add ${{ matrix.target }}
           echo "$HOME/.cargo/bin" >> $GITHUB_PATH
-      - run: |
-          sudo apt-get update
-          sudo apt-get install -y libclang-dev cmake libshaderc-dev libvulkan-dev glslc
-
-      - run: cargo build --verbose
+      - run: cargo build --verbose ${{ matrix.profile == 'release' && '--release' || '' }}
         working-directory: ./nobodywho
 
+      - name: "Rename built file"
+        run: cp ./nobodywho/target/${{ matrix.profile }}/libnobodywho.dylib ./nobodywho-${{ matrix.target }}-${{ matrix.profile }}.dylib
+
+      - name: "Upload build artifact"
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.target }}-${{ matrix.profile }}
+          path: ./nobodywho-${{ matrix.target }}-${{ matrix.profile }}.dylib
+
+
   cargo-test:
-    runs-on: Linux
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
     steps:
       - uses: actions/checkout@v4
-      - run: |
+
+      - name: "Set up rust toolchain"
+        run: |
           curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
           . "$HOME/.cargo/env"
-          rustup update stable && rustup default stable
-          rustup target add x86_64-unknown-linux-gnu
+          rustup update stable
+          rustup default stable
           echo "$HOME/.cargo/bin" >> $GITHUB_PATH
-      - run: |
-          sudo apt-get update
-          sudo apt-get install -y libclang-dev cmake libshaderc-dev libvulkan-dev glslc
 
-      - run: wget "https://huggingface.co/bartowski/gemma-2-2b-it-GGUF/resolve/main/gemma-2-2b-it-Q5_K_M.gguf" -O ./nobodywho/model.bin
-      - run: cargo test -- --nocapture --test-threads=1
+      - name: "Install deps from distro"
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libclang-dev cmake libshaderc-dev libvulkan-dev glslc mesa-vulkan-drivers
+
+      - name: "Download test model"
+        run: wget "https://huggingface.co/bartowski/gemma-2-2b-it-GGUF/resolve/main/gemma-2-2b-it-Q5_K_M.gguf" -O ./nobodywho/model.bin
+
+      - name: "Run unit tests"
+        run: cargo test -- --nocapture --test-threads=1
         working-directory: ./nobodywho
+
+
+  zip-distributable:
+    needs: [cargo-build-linux, cargo-build-macos, cargo-build-windows]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: "Download all build artifacts"
+        uses: actions/download-artifact@v4
+        with:
+          path: ./artifacts
+
+      - name: "Make directory structure for release zip"
+        run: |
+          mkdir -p nobodywho-release/bin
+          # copy in nobodywho libs
+          cp ./artifacts/*/*nobodywho* ./nobodywho-release/bin/
+          # copy in gdextension metadata
+          cp ./nobodywho/nobodywho.gdextension ./nobodywho-release/bin/
+
+      - name: "Upload zipped build artifacts"
+        uses: actions/upload-artifact@v4
+        with:
+          name: nobodywho-all-platforms
+          path: ./nobodywho-release

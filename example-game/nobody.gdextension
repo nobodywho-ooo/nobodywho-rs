@@ -4,11 +4,11 @@ compatibility_minimum = 4.3
 reloadable = true
 
 [libraries]
-linux.debug.x86_64 =     "res://../nobody/target/debug/libnobody.so"
-linux.release.x86_64 =   "res://../nobody/target/release/libnobody.so"
-windows.debug.x86_64 =   "res://../nobody/target/debug/nobody.dll"
-windows.release.x86_64 = "res://../nobody/target/release/nobody.dll"
-macos.debug =            "res://../nobody/target/debug/libnobody.dylib"
-macos.release =          "res://../nobody/target/release/libnobody.dylib"
-macos.debug.arm64 =      "res://../nobody/target/debug/libnobody.dylib"
-macos.release.arm64 =    "res://../nobody/target/release/libnobody.dylib"
+linux.debug.x86_64 =     "res://../nobodywho/target/debug/libnobodywho.so"
+linux.release.x86_64 =   "res://../nobodywho/target/release/libnobodywho.so"
+windows.debug.x86_64 =   "res://../nobodywho/target/debug/nobodywho.dll"
+windows.release.x86_64 = "res://../nobodywho/target/release/nobodywho.dll"
+macos.debug =            "res://../nobodywho/target/debug/libnobodywho.dylib"
+macos.release =          "res://../nobodywho/target/release/libnobodywho.dylib"
+macos.debug.arm64 =      "res://../nobodywho/target/debug/libnobodywho.dylib"
+macos.release.arm64 =    "res://../nobodywho/target/release/libnobodywho.dylib"
