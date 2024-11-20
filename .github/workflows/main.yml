@@ -71,9 +71,7 @@ jobs:
       - name: "Cache Cargo Home"
         uses: actions/cache@v4
         with:
-          path: |
-            ~/.cargo
-            nobodywho/target
+          path: ~/.cargo
           key: ${{ runner.os }}-cargo-home-${{ matrix.target }}-${{ matrix.profile }}-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-cargo-home-${{ matrix.target }}-${{ matrix.profile }}-
