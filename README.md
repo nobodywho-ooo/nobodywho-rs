@@ -8,9 +8,13 @@ NobodyWho is a plugin for the Godot game engine that lets you interact with loca
 
 ## How to Install
 
-You can install it from inside the Godot editor: In Godot 4.3+, go to AssetLib and search for "NobodyWho"
+~~You can install it from inside the Godot editor: In Godot 4.3+, go to AssetLib and search for "NobodyWho"~~
 
-...or you can grab a specific version from our github releases page.
+~~...or you can grab a specific version from our [github releases page.](https://github.com/nobodywho-ooo/nobodywho/releases)~~
+
+The plugin is currently awaiting approval from the godot asset library. Until it is approved, you can grab the plugin from our [releases page.](https://github.com/nobodywho-ooo/nobodywho/releases)
+
+You can install the zip file by going to the "AssetLib" tab in Godot, selecting "Import", and then navigating to the downloaded zip file.
 
 
 ## Getting started
