@@ -29,7 +29,7 @@ Now you can add a script to the `NobodyWhoPromptChat` node, to provide your chat
 `NobodyWhoPromptChat` uses this programming interface:
     - `run()`: a function that starts the LLM worker. Must be called before doing anything else.
     - `say(text)`: a function that can be used to send text from the user to the LLM.
-    - `completion_updated(text)`: a signal with a string parameter, that is emitted every time the LLM produces more text. Contains rougly one word per invocation.
+    - `completion_updated(text)`: a signal with a string parameter, that is emitted every time the LLM produces more text. Contains roughly one word per invocation.
     - `completion_finished()`: a signal which indicates that the LLM is done speaking.
 
 
