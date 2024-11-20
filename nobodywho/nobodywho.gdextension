@@ -11,3 +11,8 @@ macos.debug =            "res://bin/nobodywho-x86_64-apple-darwin-debug.dylib"
 macos.release =          "res://bin/nobodywho-x86_64-apple-darwin-release.dylib"
 macos.debug.arm64 =      "res://bin/nobodywho-aarch64-apple-darwin-debug.dylib"
 macos.release.arm64 =    "res://bin/nobodywho-aarch64-apple-darwin-release.dylib"
+
+[icons]
+NobodyWhoModel =            "res://bin/icon.svg"
+NobodyWhoPromptChat =       "res://bin/icon.svg"
+NobodyWhoPromptCompletion = "res://bin/icon.svg"

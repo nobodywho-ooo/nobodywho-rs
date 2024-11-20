@@ -202,6 +202,7 @@ jobs:
           cp ./artifacts/*/*nobodywho* ./nobodywho-release/bin/
           # copy in gdextension metadata
           cp ./nobodywho/nobodywho.gdextension ./nobodywho-release/bin/
+          cp ./assets/icon.svg ./nobodywho-release/bin/
 
       - name: "Upload zipped build artifacts"
         uses: actions/upload-artifact@v4
