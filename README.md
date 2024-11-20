@@ -1,5 +1,5 @@
 
-![Nobody Who](./banner.png)
+![Nobody Who](./assets/banner.png)
 
 # Nobody Who‽
 
