@@ -2,6 +2,8 @@ name: "Build and test"
 on:
   pull_request:
   push:
+permissions:
+  contents: write
 jobs:
   cargo-build-linux:
     runs-on: ubuntu-24.04
@@ -15,6 +17,16 @@ jobs:
           - "release"
     steps:
       - uses: actions/checkout@v4
+
+      - name: "Cache Cargo Home"
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo
+            nobodywho/target
+          key: ${{ runner.os }}-cargo-home-${{ matrix.target }}-${{ matrix.profile }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-home-${{ matrix.target }}-${{ matrix.profile }}-
 
       - name: "Setup rust toolchain"
         run: |
@@ -55,6 +67,14 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: "Cache Cargo Home"
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo
+          key: ${{ runner.os }}-cargo-home-${{ matrix.target }}-${{ matrix.profile }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-home-${{ matrix.target }}-${{ matrix.profile }}-
 
       - name: Install Rust
         uses: actions-rs/toolchain@v1
@@ -97,6 +117,15 @@ jobs:
           - "release"
     steps:
       - uses: actions/checkout@v4
+
+      - name: "Cache Cargo Home"
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo
+          key: ${{ runner.os }}-cargo-home-${{ matrix.target }}-${{ matrix.profile }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-home-${{ matrix.target }}-${{ matrix.profile }}-
+
       - run: |
           curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
           . "$HOME/.cargo/env"
@@ -123,6 +152,16 @@ jobs:
       fail-fast: false
     steps:
       - uses: actions/checkout@v4
+
+      - name: "Cache Cargo Home"
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo
+            nobodywho/target
+          key: ${{ runner.os }}-cargo-home-${{ matrix.target }}-${{ matrix.profile }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-home-${{ matrix.target }}-${{ matrix.profile }}-
 
       - name: "Set up rust toolchain"
         run: |
@@ -169,3 +208,26 @@ jobs:
         with:
           name: nobodywho-all-platforms
           path: ./nobodywho-release
+
+
+  create-github-release:
+    needs: [zip-distributable, cargo-test]
+    runs-on: ubuntu-24.04
+    if: startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - name: "Download build artifacts"
+        uses: actions/download-artifact@v4
+        with:
+          name: nobodywho-all-platforms
+          path: ./nobodywho-release
+
+      - name: "Make zip file"
+        working-directory: ./nobodywho-release
+        run: zip -r "../nobodywho-${{ github.ref_name }}.zip" ./**
+
+      - name: "Create GitHub Release"
+        uses: softprops/action-gh-release@v1
+        with:
+          files: "./nobodywho-${{ github.ref_name }}.zip"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
