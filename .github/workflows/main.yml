@@ -216,8 +216,8 @@ jobs:
           path: ./nobodywho-release
 
       - name: "Make zip file"
-        run: |
-          zip -r "nobodywho-${{ github.ref_name }}.zip" ./nobodywho-release/**
+        working-directory: ./nobodywho-release
+        run: zip -r "../nobodywho-${{ github.ref_name }}.zip" ./**
 
       - name: "Create GitHub Release"
         uses: softprops/action-gh-release@v1
