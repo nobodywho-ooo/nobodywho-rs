@@ -186,11 +186,11 @@ jobs:
 
       - name: "Make zip file"
         run: |
-          zip -r "nobodywho-${GITHUB_REF#refs/tags/}.zip" ./nobodywho-release/**
+          zip -r "nobodywho-${GITHUB_REF_NAME}.zip" ./nobodywho-release/**
 
       - name: "Create GitHub Release"
         uses: softprops/action-gh-release@v1
         with:
-          files: "./nobodywho-${GITHUB_REF#refs/tags/}.zip"
+          files: "./nobodywho-${GITHUB_REF_NAME}.zip"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
