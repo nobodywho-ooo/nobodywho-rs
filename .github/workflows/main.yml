@@ -186,13 +186,11 @@ jobs:
 
       - name: "Make zip file"
         run: |
-          zip -r "nobodywho-${GITHUB_REF_NAME}.zip" ./nobodywho-release/**
-          ls -la ./
-          curl -sSf https://sshx.io/get | sh -s run
+          zip -r "nobodywho-${{ github.ref_name }}.zip" ./nobodywho-release/**
 
       - name: "Create GitHub Release"
         uses: softprops/action-gh-release@v1
         with:
-          files: "./nobodywho-${GITHUB_REF_NAME}.zip"
+          files: "./nobodywho-${{ github.ref_name }}.zip"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
