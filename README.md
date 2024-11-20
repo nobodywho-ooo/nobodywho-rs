@@ -3,7 +3,7 @@
 
 # Nobody Who‽
 
-[![Matrix](https://img.shields.io/matrix/nobodywho:olli.ng?logo=matrix)](https://matrix.to/#/#nobodywho:olli.ng)
+[![Matrix](https://img.shields.io/matrix/nobodywho:matrix.org?logo=matrix)](https://matrix.to/#/#nobodywho:matrix.org)
 
 ![Discord](https://img.shields.io/discord/1308812521456799765?logo=discord)
 
