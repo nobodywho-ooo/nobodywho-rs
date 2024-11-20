@@ -21,7 +21,7 @@ Once you have a GGUF model file, you can add a `NobodyWhoModel` node to your God
 
 `NobodyWhoModel` contains the weights of the model. The model takes up a lot of RAM, and can take a little while to initialize, so if you plan on having several characters/conversations, it's a big advantage to point to the same `NobodyWhoModel` node.
 
-Now you can add a `NobodyWhoPromptChat` node to your scene. From the node inspector, show this chat node where to find the `NobodyWhoModel` node.
+Now you can add a `NobodyWhoPromptChat` node to your scene. From the node inspector, set the "Model Node" field, to show this chat node where to find the `NobodyWhoModel`.
 Also in the inspector, you can provide a prompt, which gives the LLM instructions on how to carry out the chat.
 
 Now you can add a script to the `NobodyWhoPromptChat` node, to provide your chat interaction.
