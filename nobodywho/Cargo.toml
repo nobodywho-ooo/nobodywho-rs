@@ -13,6 +13,8 @@ godot = { git = "https://github.com/godot-rust/gdext", branch = "master", featur
 ] }
 llama-cpp-2 = { version = "0.1.83" }
 num_cpus = "1.16.0"
+rusqlite = { version = "0.32.1", features = ["bundled"] }
+sqlite-vec = "0.1.5"
 wgpu = "23.0.0"
 
 [target.'cfg(not(target_os = "macos"))'.dependencies]
