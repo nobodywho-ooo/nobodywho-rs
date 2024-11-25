@@ -114,6 +114,8 @@ macro_rules! emit_tokens {
                         godot_error!("Unexpected: Model channel disconnected");
                     }
                 }
+            } else {
+                break;
             }
         }
     }};
