@@ -43,7 +43,15 @@ impl INode for NobodyWhoModel {
         let model_path_string: String = project_settings
             .globalize_path(self.model_path.clone())
             .into();
-        self.model = Some(llm::get_model(model_path_string.as_str()));
+
+        match llm::get_model(model_path_string.as_str()) {
+            Ok(model) => {
+                self.model = Some(model);
+            }
+            Err(msg) => {
+                godot_error!("Could not load model: {msg}");
+            }
+        }
     }
 }
 

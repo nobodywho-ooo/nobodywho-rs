@@ -32,10 +32,14 @@ pub fn has_discrete_gpu() -> bool {
         .any(|a| a.get_info().device_type == wgpu::DeviceType::DiscreteGpu)
 }
 
-pub fn get_model(model_path: &str) -> Arc<LlamaModel> {
+pub fn get_model(model_path: &str) -> Result<Arc<LlamaModel>, String> {
     // HACK: only offload anything to the gpu if we can find a dedicated GPU
     //       there seems to be a bug which results in garbage tokens if we over-allocate an integrated GPU
     //       while using the vulkan backend. See: https://github.com/nobodywho-ooo/nobodywho-rs/pull/14
+    if !std::path::Path::new(model_path).exists() {
+        return Err(format!("{model_path} does not exist."));
+    }
+
     let model_params = LlamaModelParams::default().with_n_gpu_layers(
         if has_discrete_gpu() || cfg!(target_os = "macos") {
             1000000
@@ -44,7 +48,9 @@ pub fn get_model(model_path: &str) -> Arc<LlamaModel> {
         },
     );
     let model_params = pin!(model_params);
-    Arc::new(LlamaModel::load_from_file(&LLAMA_BACKEND, model_path, &model_params).unwrap())
+    let model = LlamaModel::load_from_file(&LLAMA_BACKEND, model_path, &model_params)
+        .map_err(|_| format!("Looks like {model_path} is not a valid or supported GGUF model."))?;
+    Ok(Arc::new(model))
 }
 
 pub fn apply_chat_template(model: Model, chat: Vec<(String, String)>) -> Result<String, String> {
