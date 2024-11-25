@@ -12,6 +12,31 @@ struct NobodyWhoExtension;
 unsafe impl ExtensionLibrary for NobodyWhoExtension {}
 
 #[derive(GodotClass)]
+#[class(tool, base=Resource)]
+struct NobodyWhoSampler {
+    base: Base<Resource>,
+
+    #[export]
+    top_p: u32,
+    #[export]
+    top_k: u32,
+    #[export]
+    temperature: u32,
+}
+
+#[godot_api]
+impl IResource for NobodyWhoSampler {
+    fn init(base: Base<Resource>) -> Self {
+        Self {
+            base,
+            top_p: 0,
+            top_k: 0,
+            temperature: 0,
+        }
+    }
+}
+
+#[derive(GodotClass)]
 #[class(base=Node)]
 struct NobodyWhoModel {
     #[export(file = "*.gguf")]
@@ -173,6 +198,9 @@ struct NobodyWhoPromptChat {
     model_node: Option<Gd<NobodyWhoModel>>,
 
     #[export]
+    sampler: Option<Gd<NobodyWhoSampler>>,
+
+    #[export]
     #[var(hint = MULTILINE_TEXT)]
     prompt: GString,
     sent_prompt: bool,
@@ -188,6 +216,7 @@ impl INode for NobodyWhoPromptChat {
     fn init(base: Base<Node>) -> Self {
         Self {
             model_node: None,
+            sampler: None,
             prompt: "".into(),
             sent_prompt: false,
             prompt_tx: None,
