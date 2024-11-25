@@ -197,12 +197,12 @@ jobs:
 
       - name: "Make directory structure for release zip"
         run: |
-          mkdir -p nobodywho-release/bin
+          mkdir -p nobodywho-release/bin/addons/nobodywho
           # copy in nobodywho libs
-          cp ./artifacts/*/*nobodywho* ./nobodywho-release/bin/
+          cp ./artifacts/*/*nobodywho* ./nobodywho-release/bin/addons/nobodywho/
           # copy in gdextension metadata
-          cp ./nobodywho/nobodywho.gdextension ./nobodywho-release/bin/
-          cp ./assets/icon.svg ./nobodywho-release/bin/
+          cp ./nobodywho/nobodywho.gdextension ./nobodywho-release/bin/addons/nobodywho/
+          cp ./assets/icon.svg ./nobodywho-release/bin/addons/nobodywho/
 
       - name: "Upload zipped build artifacts"
         uses: actions/upload-artifact@v4
