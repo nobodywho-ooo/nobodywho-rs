@@ -64,7 +64,7 @@ pub fn run_worker(
     completion_tx: Sender<LLMOutput>,
     seed: u32,
 ) {
-    let n_threads = num_cpus::get() as i32;
+    let n_threads = std::thread::available_parallelism().unwrap().get() as i32;
     let ctx_params = LlamaContextParams::default()
         .with_seed(seed)
         .with_n_threads(n_threads)
