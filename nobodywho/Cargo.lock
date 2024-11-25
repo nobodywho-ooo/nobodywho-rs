@@ -794,7 +794,7 @@ dependencies = [
 
 [[package]]
 name = "nobodywho"
-version = "0.1.0"
+version = "2.0.1"
 dependencies = [
  "encoding_rs",
  "godot",
