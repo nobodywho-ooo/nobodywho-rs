@@ -144,7 +144,7 @@ pub fn run_worker(
 macro_rules! test_model_path {
     () => {
         std::env::var("TEST_MODEL")
-            .unwrap_or("model.bin".to_string())
+            .unwrap_or("model.gguf".to_string())
             .as_str()
     };
 }
