@@ -37,8 +37,15 @@ impl INode for NobodyWhoModel {
             seed,
         }
     }
+}
 
-    fn ready(&mut self) {
+impl NobodyWhoModel {
+    // memoized model loader
+    fn get_model(&mut self) -> Result<llm::Model, String> {
+        if let Some(model) = &self.model {
+            return Ok(model.clone());
+        }
+
         let project_settings = ProjectSettings::singleton();
         let model_path_string: String = project_settings
             .globalize_path(self.model_path.clone())
@@ -46,10 +53,12 @@ impl INode for NobodyWhoModel {
 
         match llm::get_model(model_path_string.as_str()) {
             Ok(model) => {
-                self.model = Some(model);
+                self.model = Some(model.clone());
+                Ok(model.clone())
             }
             Err(msg) => {
                 godot_error!("Could not load model: {msg}");
+                Err(msg)
             }
         }
     }
@@ -62,11 +71,8 @@ macro_rules! run_model {
         let mut run_result = || -> Result<(), String> {
             // get NobodyWhoModel
             let gd_model_node = $self.model_node.as_mut().ok_or("Model node is not set.")?;
-            let nobody_model: GdRef<NobodyWhoModel> = gd_model_node.bind();
-            let model: llm::Model = nobody_model
-                .model
-                .clone()
-                .ok_or("Could not access NobodyWhoModel.")?;
+            let mut nobody_model = gd_model_node.bind_mut();
+            let model: llm::Model = nobody_model.get_model()?;
 
             // make and store channels for communicating with the llm worker thread
             let (prompt_tx, prompt_rx) = std::sync::mpsc::channel::<String>();

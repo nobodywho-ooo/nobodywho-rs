@@ -163,7 +163,7 @@ mod tests {
 
     #[test]
     fn test_completion() {
-        let model = get_model(test_model_path!());
+        let model = get_model(test_model_path!()).unwrap();
 
         let (prompt_tx, prompt_rx) = std::sync::mpsc::channel();
         let (completion_tx, completion_rx) = std::sync::mpsc::channel();
@@ -193,7 +193,7 @@ mod tests {
 
     #[test]
     fn test_chat_completion() {
-        let model = get_model(test_model_path!());
+        let model = get_model(test_model_path!()).unwrap();
         let model_copy = model.clone();
 
         let (prompt_tx, prompt_rx) = std::sync::mpsc::channel();
