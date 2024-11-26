@@ -1,7 +1,7 @@
 ![Nobody Who](./assets/banner.png)
 
 [![Matrix](https://img.shields.io/matrix/nobodywho:matrix.org?logo=matrix&style=flat-square)](https://matrix.to/#/#nobodywho:matrix.org)
-[![Discord](https://img.shields.io/discord/1308812521456799765?logo=discord&style=flat-square)](https://discord.gg/yTxaNEgg)
+[![Discord](https://img.shields.io/discord/1308812521456799765?logo=discord&style=flat-square)](https://discord.gg/qhaMc2qCYB)
 [![Mastodon](https://img.shields.io/badge/Mastodon-6364FF?logo=mastodon&logoColor=fff&style=flat-square)](https://mastodon.gamedev.place/@nobodywho)
 
 NobodyWho is a plugin for the Godot game engine that lets you interact with local LLMs for interactive storytelling.
