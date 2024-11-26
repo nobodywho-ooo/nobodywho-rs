@@ -3,6 +3,7 @@ use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, LazyLock};
 
 use llama_cpp_2::context::params::LlamaContextParams;
+use llama_cpp_2::context::sample::sampler;
 use llama_cpp_2::llama_backend::LlamaBackend;
 use llama_cpp_2::llama_batch::LlamaBatch;
 use llama_cpp_2::model::params::LlamaModelParams;
@@ -10,6 +11,7 @@ use llama_cpp_2::model::LlamaChatMessage;
 use llama_cpp_2::model::LlamaModel;
 use llama_cpp_2::model::{AddBos, Special};
 use llama_cpp_2::token::data_array::LlamaTokenDataArray;
+use llama_cpp_2::token::LlamaToken;
 
 static LLAMA_BACKEND: LazyLock<LlamaBackend> =
     LazyLock::new(|| LlamaBackend::init().expect("Failed to initialize llama backend"));
@@ -53,6 +55,34 @@ pub fn get_model(model_path: &str) -> Result<Arc<LlamaModel>, String> {
     Ok(Arc::new(model))
 }
 
+pub type Sampler<'a> = sampler::Sampler<'a, Vec<LlamaToken>>;
+
+pub fn default_sampler<'a>() -> Sampler<'a> {
+    // default llama.cpp sampler
+    // taken from https://docs.rs/llama-cpp-2/latest/llama_cpp_2/context/sample/sampler/index.html
+
+    // Sample a token greedily and add to the history.
+    let finalizer = &|mut canidates: LlamaTokenDataArray, history: &mut Vec<LlamaToken>| {
+        canidates.sample_softmax(None);
+        let token = canidates.data[0];
+        history.push(token.id());
+        vec![token]
+    };
+
+    let mut sampler = sampler::Sampler::new(finalizer);
+
+    sampler.push_step(&|c, history| c.sample_repetition_penalty(None, history, 64, 1.1, 0.0, 0.0));
+    sampler.push_step(&|c, _| c.sample_top_k(None, 40, 1));
+    sampler.push_step(&|c, _| c.sample_tail_free(None, 1.0, 1));
+    sampler.push_step(&|c, _| c.sample_typical(None, 1.0, 1));
+    sampler.push_step(&|c, _| c.sample_top_p(None, 0.95, 1));
+    sampler.push_step(&|c, _| c.sample_min_p(None, 0.05, 1));
+    sampler.push_step(&|c, _| c.sample_temp(None, 0.5));
+    sampler
+}
+
+// random candidates
+
 pub fn apply_chat_template(model: Model, chat: Vec<(String, String)>) -> Result<String, String> {
     let chat_result: Result<Vec<LlamaChatMessage>, String> = chat
         .into_iter()
@@ -64,11 +94,12 @@ pub fn apply_chat_template(model: Model, chat: Vec<(String, String)>) -> Result<
     Ok(chat_string)
 }
 
-pub fn run_worker(
+pub fn run_worker<'a>(
     model: Arc<LlamaModel>,
     prompt_rx: Receiver<String>,
     completion_tx: Sender<LLMOutput>,
     seed: u32,
+    sampler: &mut Sampler,
 ) {
     let n_threads = std::thread::available_parallelism().unwrap().get() as i32;
     let ctx_params = LlamaContextParams::default()
@@ -103,6 +134,7 @@ pub fn run_worker(
         // The `Decoder`
         let mut utf8decoder = encoding_rs::UTF_8.new_decoder();
 
+        let mut history = vec![];
         loop {
             // sample the next token
             {
@@ -111,8 +143,9 @@ pub fn run_worker(
                 let candidates_p = LlamaTokenDataArray::from_iter(candidates, false);
 
                 // sample the most likely token
-                // TODO: parameterize sampler
-                let new_token_id = ctx.sample_token_greedy(candidates_p);
+                let tokens = sampler.sample(&mut history, candidates_p);
+                assert_eq!(tokens.len(), 1);
+                let new_token_id: LlamaToken = tokens[0].id();
 
                 // is it an end of stream?
                 if new_token_id == ctx.model.token_eos() {
@@ -169,7 +202,15 @@ mod tests {
         let (prompt_tx, prompt_rx) = std::sync::mpsc::channel();
         let (completion_tx, completion_rx) = std::sync::mpsc::channel();
 
-        std::thread::spawn(move || run_worker(model, prompt_rx, completion_tx, 1234));
+        std::thread::spawn(move || {
+            run_worker(
+                model,
+                prompt_rx,
+                completion_tx,
+                1234,
+                &mut default_sampler(),
+            )
+        });
 
         prompt_tx.send("Count to five: 1, 2, ".to_string()).unwrap();
 
@@ -200,7 +241,15 @@ mod tests {
         let (prompt_tx, prompt_rx) = std::sync::mpsc::channel();
         let (completion_tx, completion_rx) = std::sync::mpsc::channel();
 
-        std::thread::spawn(|| run_worker(model, prompt_rx, completion_tx, 1234));
+        std::thread::spawn(|| {
+            run_worker(
+                model,
+                prompt_rx,
+                completion_tx,
+                1234,
+                &mut default_sampler(),
+            )
+        });
 
         let chat: Vec<LlamaChatMessage> = vec![
             LlamaChatMessage::new(

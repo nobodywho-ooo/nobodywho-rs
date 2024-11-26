@@ -12,6 +12,31 @@ struct NobodyWhoExtension;
 unsafe impl ExtensionLibrary for NobodyWhoExtension {}
 
 #[derive(GodotClass)]
+#[class(tool, base=Resource)]
+struct NobodyWhoSampler {
+    base: Base<Resource>,
+
+    #[export]
+    temperature: f32,
+}
+
+#[godot_api]
+impl IResource for NobodyWhoSampler {
+    fn init(base: Base<Resource>) -> Self {
+        Self {
+            base,
+            temperature: 0.5,
+        }
+    }
+}
+
+impl<'a> NobodyWhoSampler {
+    pub fn get_sampler(&self) -> llm::Sampler<'a> {
+        llm::default_sampler()
+    }
+}
+
+#[derive(GodotClass)]
 #[class(base=Node)]
 struct NobodyWhoModel {
     #[export(file = "*.gguf")]
@@ -74,6 +99,14 @@ macro_rules! run_model {
             let mut nobody_model = gd_model_node.bind_mut();
             let model: llm::Model = nobody_model.get_model()?;
 
+            // get NobodyWhoSampler
+            let sampler: llm::Sampler = if let Some(gd_sampler) = $self.sampler.as_mut() {
+                let nobody_sampler: GdRef<NobodyWhoSampler> = gd_sampler.bind();
+                nobody_sampler.get_sampler()
+            } else {
+                llm::default_sampler()
+            };
+
             // make and store channels for communicating with the llm worker thread
             let (prompt_tx, prompt_rx) = std::sync::mpsc::channel::<String>();
             let (completion_tx, completion_rx) = std::sync::mpsc::channel::<llm::LLMOutput>();
@@ -83,7 +116,14 @@ macro_rules! run_model {
             // start the llm worker
             let seed = nobody_model.seed;
             std::thread::spawn(move || {
-                run_worker(model, prompt_rx, completion_tx, seed);
+                run_worker(
+                    model,
+                    prompt_rx,
+                    completion_tx,
+                    seed,
+                    // TODO: find a way to move a sampler (or sampler config) into this thread
+                    &mut llm::default_sampler(),
+                );
             });
 
             Ok(())
@@ -141,6 +181,9 @@ struct NobodyWhoPromptCompletion {
     #[export]
     model_node: Option<Gd<NobodyWhoModel>>,
 
+    #[export]
+    sampler: Option<Gd<NobodyWhoSampler>>,
+
     completion_rx: Option<Receiver<llm::LLMOutput>>,
     prompt_tx: Option<Sender<String>>,
 
@@ -152,6 +195,7 @@ impl INode for NobodyWhoPromptCompletion {
     fn init(base: Base<Node>) -> Self {
         Self {
             model_node: None,
+            sampler: None,
             completion_rx: None,
             prompt_tx: None,
             base,
@@ -189,6 +233,9 @@ struct NobodyWhoPromptChat {
     model_node: Option<Gd<NobodyWhoModel>>,
 
     #[export]
+    sampler: Option<Gd<NobodyWhoSampler>>,
+
+    #[export]
     #[var(hint = MULTILINE_TEXT)]
     prompt: GString,
     sent_prompt: bool,
@@ -204,6 +251,7 @@ impl INode for NobodyWhoPromptChat {
     fn init(base: Base<Node>) -> Self {
         Self {
             model_node: None,
+            sampler: None,
             prompt: "".into(),
             sent_prompt: false,
             prompt_tx: None,
