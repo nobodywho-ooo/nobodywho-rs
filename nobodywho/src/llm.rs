@@ -1,17 +1,17 @@
-use std::pin::pin;
-use std::sync::mpsc::{Receiver, Sender};
-use std::sync::{Arc, LazyLock};
-
 use llama_cpp_2::context::params::LlamaContextParams;
 use llama_cpp_2::llama_backend::LlamaBackend;
 use llama_cpp_2::llama_batch::LlamaBatch;
 use llama_cpp_2::model::params::LlamaModelParams;
-use llama_cpp_2::model::LlamaChatMessage;
 use llama_cpp_2::model::LlamaModel;
 use llama_cpp_2::model::{AddBos, Special};
 use llama_cpp_2::sampling::params::LlamaSamplerChainParams;
 use llama_cpp_2::sampling::LlamaSampler;
 use llama_cpp_2::token::LlamaToken;
+use std::pin::pin;
+use std::sync::mpsc::{Receiver, Sender};
+use std::sync::{Arc, LazyLock};
+
+use crate::chat_state;
 
 static LLAMA_BACKEND: LazyLock<LlamaBackend> =
     LazyLock::new(|| LlamaBackend::init().expect("Failed to initialize llama backend"));
@@ -74,18 +74,6 @@ pub fn get_model(
 }
 
 // random candidates
-
-pub fn apply_chat_template(model: Model, chat: Vec<(String, String)>) -> Result<String, String> {
-    let chat_result: Result<Vec<LlamaChatMessage>, String> = chat
-        .into_iter()
-        .map(|t| LlamaChatMessage::new(t.0, t.1).map_err(|e| e.to_string()))
-        .collect();
-    let chat_string = model
-        .apply_chat_template(None, chat_result?, true)
-        .map_err(|e| e.to_string())?;
-    Ok(chat_string)
-}
-
 pub struct SamplerConfig {
     pub seed: u32,
     pub temperature: f32,
@@ -133,6 +121,7 @@ fn make_sampler(
         )
         .add_temp(config.temperature)
         .add_mirostat_v2(config.seed, config.mirostat_tau, config.mirostat_eta);
+
     Ok(sampler)
 }
 
@@ -168,13 +157,13 @@ pub enum WorkerError {
 
 pub fn run_worker(
     model: Arc<LlamaModel>,
-    prompt_rx: Receiver<String>,
+    message_rx: Receiver<(String, String)>,
     completion_tx: Sender<LLMOutput>,
     sampler_config: SamplerConfig,
     n_ctx: u32,
 ) {
     // this function is a pretty thin wrapper to send back an `Err` if we get it
-    if let Err(msg) = run_worker_result(model, prompt_rx, &completion_tx, sampler_config, n_ctx) {
+    if let Err(msg) = run_worker_result(model, message_rx, &completion_tx, sampler_config, n_ctx) {
         completion_tx
             .send(LLMOutput::FatalErr(msg))
             .expect("Could not send llm worker fatal error back to consumer.");
@@ -183,11 +172,14 @@ pub fn run_worker(
 
 fn run_worker_result(
     model: Arc<LlamaModel>,
-    prompt_rx: Receiver<String>,
+    message_rx: Receiver<(String, String)>,
     completion_tx: &Sender<LLMOutput>,
     sampler_config: SamplerConfig,
     n_ctx: u32,
 ) -> Result<(), WorkerError> {
+    let chat_template = model.get_chat_template(4_000).unwrap();
+    let mut chat_state = chat_state::ChatState::new(chat_template);
+
     let n_threads = std::thread::available_parallelism()?.get() as i32;
     let n_ctx: u32 = std::cmp::min(n_ctx, model.n_ctx_train());
     let ctx_params = LlamaContextParams::default()
@@ -201,8 +193,12 @@ fn run_worker_result(
 
     let mut sampler = make_sampler(&model, sampler_config)?;
 
-    while let Ok(prompt) = prompt_rx.recv() {
-        let tokens_list = ctx.model.str_to_token(&prompt, AddBos::Always)?;
+    while let Ok((role, content)) = message_rx.recv() {
+        chat_state.add_message(&role, &content);
+
+        let diff = chat_state.render_chat();
+
+        let tokens_list = ctx.model.str_to_token(&diff, AddBos::Always)?;
 
         let mut batch = LlamaBatch::new(ctx.n_ctx() as usize, 1);
 
@@ -226,6 +222,8 @@ fn run_worker_result(
         // The `Decoder`
         let mut utf8decoder = encoding_rs::UTF_8.new_decoder();
 
+        let mut response = String::new();
+
         loop {
             // sample the next token
             {
@@ -237,6 +235,9 @@ fn run_worker_result(
                 if new_token_id == ctx.model.token_eos() {
                     batch.clear();
                     batch.add(new_token_id, n_cur, &[0], true)?;
+
+                    chat_state.add_message("assistant", &response);
+
                     completion_tx
                         .send(LLMOutput::Done)
                         .map_err(|_| WorkerError::SendError)?;
@@ -249,6 +250,8 @@ fn run_worker_result(
                 let mut output_string = String::with_capacity(32);
                 let _decode_result =
                     utf8decoder.decode_to_string(&output_bytes, &mut output_string, false);
+
+                response.push_str(&output_string);
 
                 // send new token string back to user
                 completion_tx

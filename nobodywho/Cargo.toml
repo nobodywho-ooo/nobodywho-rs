@@ -11,11 +11,15 @@ encoding_rs = "0.8.34"
 godot = { git = "https://github.com/godot-rust/gdext", branch = "master", features = [
     "experimental-threads",
 ] }
-llama-cpp-2 = { version = "0.1.84" }
+llama-cpp-2 = { git = "https://github.com/utilityai/llama-cpp-rs", branch = "main" }
 rusqlite = { version = "0.32.1", features = ["bundled"] }
 sqlite-vec = "0.1.5"
 thiserror = "2.0.3"
+minijinja = { version = "2.5.0", features = ["builtins", "json", "loader"] }
+serde = { version = "1.0.215", features = ["derive"] }
 wgpu = "23.0.0"
 
 [target.'cfg(not(target_os = "macos"))'.dependencies]
-llama-cpp-2 = { version = "0.1.84", features = ["vulkan"] }
+llama-cpp-2 = { git = "https://github.com/utilityai/llama-cpp-rs", branch = "main", features = [
+    "vulkan",
+] }
