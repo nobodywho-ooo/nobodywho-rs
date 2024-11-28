@@ -106,7 +106,7 @@ jobs:
       - name: "(DEBUG STEP) Upload entire taget dir"
         uses: actions/upload-artifact@v4
         with:
-          name: DEBUG-WINDOWS-STUFF
+          name: DEBUG-WINDOWS-STUFF-${{ matrix.profile }}
           path: ./nobodywho/target
 
 
