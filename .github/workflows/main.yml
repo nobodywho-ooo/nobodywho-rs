@@ -103,6 +103,12 @@ jobs:
           name: ${{ matrix.target }}-${{ matrix.profile }}
           path: ./nobodywho-${{ matrix.target }}-${{ matrix.profile }}.dll
 
+      - name: "(DEBUG STEP) Upload entire taget dir"
+        uses: actions/upload-artifact@v4
+        with:
+          name: DEBUG-WINDOWS-STUFF
+          path: ./nobodywho/target
+
 
   cargo-build-macos:
     runs-on: macos-15
