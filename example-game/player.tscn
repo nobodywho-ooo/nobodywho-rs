@@ -1,15 +1,18 @@
-[gd_scene load_steps=3 format=3 uid="uid://breb76ad7m6xn"]
+[gd_scene load_steps=4 format=3 uid="uid://breb76ad7m6xn"]
 
 [ext_resource type="Script" path="res://nobody_who_db.gd" id="2_qeomc"]
 [ext_resource type="Script" path="res://nobody_who_prompt_chat.gd" id="2_r1dk7"]
 
+[sub_resource type="NobodyWhoSampler" id="NobodyWhoSampler_djbpq"]
+
 [node name="NobodyWhoPromptCompletion" type="Node2D"]
 
 [node name="NobodyWhoModel" type="NobodyWhoModel" parent="."]
-model_path = "res://Llama-3.2-1B-Instruct-f16.gguf"
+model_path = "res://model.gguf"
 
 [node name="NobodyWhoPromptChat" type="NobodyWhoPromptChat" parent="." node_paths=PackedStringArray("model_node")]
 model_node = NodePath("../NobodyWhoModel")
+sampler = SubResource("NobodyWhoSampler_djbpq")
 prompt = "You are a powerful wizard who always tries to cast spells to turn people into frogs.
 You are speaking to bob, the adventurer.
 Bob the Adventurer's full name is \"Robert Mortimer Vanderfuck\""

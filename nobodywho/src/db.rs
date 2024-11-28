@@ -118,10 +118,10 @@ impl NobodyWhoDB {
                     Value::Text(s) => s.to_variant(),
                     Value::Blob(b) => PackedByteArray::from(b).to_variant(),
                 };
-                row_data.push(value);
+                row_data.push(&value);
             }
 
-            result.push(row_data.to_variant());
+            result.push(&row_data.to_variant());
         }
 
         result

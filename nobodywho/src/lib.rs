@@ -17,7 +17,25 @@ struct NobodyWhoSampler {
     base: Base<Resource>,
 
     #[export]
+    seed: u32,
+    #[export]
     temperature: f32,
+    #[export]
+    penalty_last_n: i32,
+    #[export]
+    penalty_repeat: f32,
+    #[export]
+    penalty_freq: f32,
+    #[export]
+    penalty_present: f32,
+    #[export]
+    penalize_nl: bool,
+    #[export]
+    ignore_eos: bool,
+    #[export]
+    mirostat_tau: f32,
+    #[export]
+    mirostat_eta: f32,
 }
 
 #[godot_api]
@@ -25,14 +43,34 @@ impl IResource for NobodyWhoSampler {
     fn init(base: Base<Resource>) -> Self {
         Self {
             base,
-            temperature: 0.5,
+            seed: llm::DEFAULT_SAMPLER_CONFIG.seed,
+            temperature: llm::DEFAULT_SAMPLER_CONFIG.temperature,
+            penalty_last_n: llm::DEFAULT_SAMPLER_CONFIG.penalty_last_n,
+            penalty_repeat: llm::DEFAULT_SAMPLER_CONFIG.penalty_repeat,
+            penalty_freq: llm::DEFAULT_SAMPLER_CONFIG.penalty_freq,
+            penalty_present: llm::DEFAULT_SAMPLER_CONFIG.penalty_present,
+            penalize_nl: llm::DEFAULT_SAMPLER_CONFIG.penalize_nl,
+            ignore_eos: llm::DEFAULT_SAMPLER_CONFIG.ignore_eos,
+            mirostat_tau: llm::DEFAULT_SAMPLER_CONFIG.mirostat_tau,
+            mirostat_eta: llm::DEFAULT_SAMPLER_CONFIG.mirostat_eta,
         }
     }
 }
 
-impl<'a> NobodyWhoSampler {
-    pub fn get_sampler(&self) -> llm::Sampler<'a> {
-        llm::default_sampler()
+impl NobodyWhoSampler {
+    pub fn get_sampler_config(&self) -> llm::SamplerConfig {
+        llm::SamplerConfig {
+            seed: self.seed,
+            temperature: self.temperature,
+            penalty_last_n: self.penalty_last_n,
+            penalty_repeat: self.penalty_repeat,
+            penalty_freq: self.penalty_freq,
+            penalty_present: self.penalty_present,
+            penalize_nl: self.penalize_nl,
+            ignore_eos: self.ignore_eos,
+            mirostat_tau: self.mirostat_tau,
+            mirostat_eta: self.mirostat_eta,
+        }
     }
 }
 
@@ -41,9 +79,6 @@ impl<'a> NobodyWhoSampler {
 struct NobodyWhoModel {
     #[export(file = "*.gguf")]
     model_path: GString,
-
-    #[export]
-    seed: u32,
 
     model: Option<llm::Model>,
 }
@@ -54,12 +89,9 @@ impl INode for NobodyWhoModel {
         // default values to show in godot editor
         let model_path: String = "model.gguf".into();
 
-        let seed = 1234;
-
         Self {
             model_path: model_path.into(),
             model: None,
-            seed,
         }
     }
 }
@@ -73,7 +105,7 @@ impl NobodyWhoModel {
 
         let project_settings = ProjectSettings::singleton();
         let model_path_string: String = project_settings
-            .globalize_path(self.model_path.clone())
+            .globalize_path(&self.model_path.clone())
             .into();
 
         match llm::get_model(model_path_string.as_str()) {
@@ -100,12 +132,13 @@ macro_rules! run_model {
             let model: llm::Model = nobody_model.get_model()?;
 
             // get NobodyWhoSampler
-            let sampler: llm::Sampler = if let Some(gd_sampler) = $self.sampler.as_mut() {
-                let nobody_sampler: GdRef<NobodyWhoSampler> = gd_sampler.bind();
-                nobody_sampler.get_sampler()
-            } else {
-                llm::default_sampler()
-            };
+            let sampler_config: llm::SamplerConfig =
+                if let Some(gd_sampler) = $self.sampler.as_mut() {
+                    let nobody_sampler: GdRef<NobodyWhoSampler> = gd_sampler.bind();
+                    nobody_sampler.get_sampler_config()
+                } else {
+                    llm::DEFAULT_SAMPLER_CONFIG
+                };
 
             // make and store channels for communicating with the llm worker thread
             let (prompt_tx, prompt_rx) = std::sync::mpsc::channel::<String>();
@@ -114,16 +147,8 @@ macro_rules! run_model {
             $self.completion_rx = Some(completion_rx);
 
             // start the llm worker
-            let seed = nobody_model.seed;
             std::thread::spawn(move || {
-                run_worker(
-                    model,
-                    prompt_rx,
-                    completion_tx,
-                    seed,
-                    // TODO: find a way to move a sampler (or sampler config) into this thread
-                    &mut llm::default_sampler(),
-                );
+                run_worker(model, prompt_rx, completion_tx, sampler_config);
             });
 
             Ok(())
@@ -154,18 +179,17 @@ macro_rules! emit_tokens {
                     Ok(llm::LLMOutput::Token(token)) => {
                         $self
                             .base_mut()
-                            .emit_signal("completion_updated".into(), &[Variant::from(token)]);
+                            .emit_signal("completion_updated", &[Variant::from(token)]);
                     }
                     Ok(llm::LLMOutput::Done) => {
-                        $self
-                            .base_mut()
-                            .emit_signal("completion_finished".into(), &[]);
+                        $self.base_mut().emit_signal("completion_finished", &[]);
                     }
                     Err(std::sync::mpsc::TryRecvError::Empty) => {
                         break;
                     }
                     Err(std::sync::mpsc::TryRecvError::Disconnected) => {
                         godot_error!("Unexpected: Model channel disconnected");
+                        panic!();
                     }
                 }
             } else {

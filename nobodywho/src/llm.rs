@@ -3,15 +3,16 @@ use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, LazyLock};
 
 use llama_cpp_2::context::params::LlamaContextParams;
-use llama_cpp_2::context::sample::sampler;
 use llama_cpp_2::llama_backend::LlamaBackend;
 use llama_cpp_2::llama_batch::LlamaBatch;
 use llama_cpp_2::model::params::LlamaModelParams;
 use llama_cpp_2::model::LlamaChatMessage;
 use llama_cpp_2::model::LlamaModel;
 use llama_cpp_2::model::{AddBos, Special};
-use llama_cpp_2::token::data_array::LlamaTokenDataArray;
+use llama_cpp_2::sampling::params::LlamaSamplerChainParams;
+use llama_cpp_2::sampling::LlamaSampler;
 use llama_cpp_2::token::LlamaToken;
+use llama_cpp_2::LlamaSamplerError;
 
 static LLAMA_BACKEND: LazyLock<LlamaBackend> =
     LazyLock::new(|| LlamaBackend::init().expect("Failed to initialize llama backend"));
@@ -55,32 +56,6 @@ pub fn get_model(model_path: &str) -> Result<Arc<LlamaModel>, String> {
     Ok(Arc::new(model))
 }
 
-pub type Sampler<'a> = sampler::Sampler<'a, Vec<LlamaToken>>;
-
-pub fn default_sampler<'a>() -> Sampler<'a> {
-    // default llama.cpp sampler
-    // taken from https://docs.rs/llama-cpp-2/latest/llama_cpp_2/context/sample/sampler/index.html
-
-    // Sample a token greedily and add to the history.
-    let finalizer = &|mut canidates: LlamaTokenDataArray, history: &mut Vec<LlamaToken>| {
-        canidates.sample_softmax(None);
-        let token = canidates.data[0];
-        history.push(token.id());
-        vec![token]
-    };
-
-    let mut sampler = sampler::Sampler::new(finalizer);
-
-    sampler.push_step(&|c, history| c.sample_repetition_penalty(None, history, 64, 1.1, 0.0, 0.0));
-    sampler.push_step(&|c, _| c.sample_top_k(None, 40, 1));
-    sampler.push_step(&|c, _| c.sample_tail_free(None, 1.0, 1));
-    sampler.push_step(&|c, _| c.sample_typical(None, 1.0, 1));
-    sampler.push_step(&|c, _| c.sample_top_p(None, 0.95, 1));
-    sampler.push_step(&|c, _| c.sample_min_p(None, 0.05, 1));
-    sampler.push_step(&|c, _| c.sample_temp(None, 0.5));
-    sampler
-}
-
 // random candidates
 
 pub fn apply_chat_template(model: Model, chat: Vec<(String, String)>) -> Result<String, String> {
@@ -94,16 +69,64 @@ pub fn apply_chat_template(model: Model, chat: Vec<(String, String)>) -> Result<
     Ok(chat_string)
 }
 
+pub struct SamplerConfig {
+    pub seed: u32,
+    pub temperature: f32,
+    pub penalty_last_n: i32,
+    pub penalty_repeat: f32,
+    pub penalty_freq: f32,
+    pub penalty_present: f32,
+    pub penalize_nl: bool,
+    pub ignore_eos: bool,
+    pub mirostat_tau: f32,
+    pub mirostat_eta: f32,
+}
+
+// defaults here match the defaults read from `llama-cli --help`
+pub const DEFAULT_SAMPLER_CONFIG: SamplerConfig = SamplerConfig {
+    seed: 1234,
+    temperature: 0.8,
+    penalty_last_n: -1,
+    penalty_repeat: 0.0,
+    penalty_freq: 0.0,
+    penalty_present: 0.0,
+    penalize_nl: false,
+    ignore_eos: false,
+    mirostat_tau: 5.0,
+    mirostat_eta: 0.1,
+};
+
+fn make_sampler(
+    model: &LlamaModel,
+    config: SamplerConfig,
+) -> Result<LlamaSampler, LlamaSamplerError> {
+    // init mirostat sampler
+    let sampler_params = LlamaSamplerChainParams::default();
+    let sampler = LlamaSampler::new(sampler_params)?
+        .add_penalties(
+            model.n_vocab(),
+            model.token_eos().0,
+            model.token_nl().0,
+            config.penalty_last_n,
+            config.penalty_repeat,
+            config.penalty_freq,
+            config.penalty_present,
+            config.penalize_nl,
+            config.ignore_eos,
+        )
+        .add_temp(config.temperature)
+        .add_mirostat_v2(config.seed, config.mirostat_tau, config.mirostat_eta);
+    Ok(sampler)
+}
+
 pub fn run_worker<'a>(
     model: Arc<LlamaModel>,
     prompt_rx: Receiver<String>,
     completion_tx: Sender<LLMOutput>,
-    seed: u32,
-    sampler: &mut Sampler,
+    sampler_config: SamplerConfig,
 ) {
     let n_threads = std::thread::available_parallelism().unwrap().get() as i32;
     let ctx_params = LlamaContextParams::default()
-        .with_seed(seed)
         .with_n_ctx(std::num::NonZero::new(model.n_ctx_train()))
         .with_n_threads(n_threads)
         .with_n_threads_batch(n_threads);
@@ -111,6 +134,9 @@ pub fn run_worker<'a>(
     let mut ctx = model.new_context(&LLAMA_BACKEND, ctx_params).unwrap();
 
     let mut n_cur = 0;
+
+    let mut sampler = make_sampler(&model, sampler_config)
+        .expect("Llama.cpp returned a null pointer when initializing sampler.");
 
     while let Ok(prompt) = prompt_rx.recv() {
         let tokens_list = ctx.model.str_to_token(&prompt, AddBos::Always).unwrap();
@@ -134,18 +160,12 @@ pub fn run_worker<'a>(
         // The `Decoder`
         let mut utf8decoder = encoding_rs::UTF_8.new_decoder();
 
-        let mut history = vec![];
         loop {
             // sample the next token
             {
-                let candidates = ctx.candidates_ith(batch.n_tokens() - 1);
-
-                let candidates_p = LlamaTokenDataArray::from_iter(candidates, false);
-
-                // sample the most likely token
-                let tokens = sampler.sample(&mut history, candidates_p);
-                assert_eq!(tokens.len(), 1);
-                let new_token_id: LlamaToken = tokens[0].id();
+                // sample the next token
+                let new_token_id: LlamaToken = sampler.sample(&ctx, batch.n_tokens() - 1);
+                sampler.accept(new_token_id);
 
                 // is it an end of stream?
                 if new_token_id == ctx.model.token_eos() {
@@ -203,13 +223,7 @@ mod tests {
         let (completion_tx, completion_rx) = std::sync::mpsc::channel();
 
         std::thread::spawn(move || {
-            run_worker(
-                model,
-                prompt_rx,
-                completion_tx,
-                1234,
-                &mut default_sampler(),
-            )
+            run_worker(model, prompt_rx, completion_tx, DEFAULT_SAMPLER_CONFIG)
         });
 
         prompt_tx.send("Count to five: 1, 2, ".to_string()).unwrap();
@@ -241,15 +255,7 @@ mod tests {
         let (prompt_tx, prompt_rx) = std::sync::mpsc::channel();
         let (completion_tx, completion_rx) = std::sync::mpsc::channel();
 
-        std::thread::spawn(|| {
-            run_worker(
-                model,
-                prompt_rx,
-                completion_tx,
-                1234,
-                &mut default_sampler(),
-            )
-        });
+        std::thread::spawn(|| run_worker(model, prompt_rx, completion_tx, DEFAULT_SAMPLER_CONFIG));
 
         let chat: Vec<LlamaChatMessage> = vec![
             LlamaChatMessage::new(
@@ -310,5 +316,12 @@ mod tests {
             result.contains("Danish"),
             "Expected completion to contain 'Danish', got: {result}"
         );
+    }
+
+    #[test]
+    fn test_initialize_default_sampler() {
+        let model = get_model(test_model_path!()).expect("Failed loading model");
+        let sampler = make_sampler(&model, DEFAULT_SAMPLER_CONFIG);
+        assert!(sampler.is_ok(), "make_sampler returned an Err");
     }
 }
