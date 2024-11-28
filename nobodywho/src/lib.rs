@@ -17,7 +17,25 @@ struct NobodyWhoSampler {
     base: Base<Resource>,
 
     #[export]
+    seed: u32,
+    #[export]
     temperature: f32,
+    #[export]
+    penalty_last_n: i32,
+    #[export]
+    penalty_repeat: f32,
+    #[export]
+    penalty_freq: f32,
+    #[export]
+    penalty_present: f32,
+    #[export]
+    penalize_nl: bool,
+    #[export]
+    ignore_eos: bool,
+    #[export]
+    mirostat_tau: f32,
+    #[export]
+    mirostat_eta: f32,
 }
 
 #[godot_api]
@@ -25,14 +43,34 @@ impl IResource for NobodyWhoSampler {
     fn init(base: Base<Resource>) -> Self {
         Self {
             base,
-            temperature: 0.5,
+            seed: llm::DEFAULT_SAMPLER_CONFIG.seed,
+            temperature: llm::DEFAULT_SAMPLER_CONFIG.temperature,
+            penalty_last_n: llm::DEFAULT_SAMPLER_CONFIG.penalty_last_n,
+            penalty_repeat: llm::DEFAULT_SAMPLER_CONFIG.penalty_repeat,
+            penalty_freq: llm::DEFAULT_SAMPLER_CONFIG.penalty_freq,
+            penalty_present: llm::DEFAULT_SAMPLER_CONFIG.penalty_present,
+            penalize_nl: llm::DEFAULT_SAMPLER_CONFIG.penalize_nl,
+            ignore_eos: llm::DEFAULT_SAMPLER_CONFIG.ignore_eos,
+            mirostat_tau: llm::DEFAULT_SAMPLER_CONFIG.mirostat_tau,
+            mirostat_eta: llm::DEFAULT_SAMPLER_CONFIG.mirostat_eta,
         }
     }
 }
 
-impl<'a> NobodyWhoSampler {
+impl NobodyWhoSampler {
     pub fn get_sampler_config(&self) -> llm::SamplerConfig {
-        llm::DEFAULT_SAMPLER_CONFIG
+        llm::SamplerConfig {
+            seed: self.seed,
+            temperature: self.temperature,
+            penalty_last_n: self.penalty_last_n,
+            penalty_repeat: self.penalty_repeat,
+            penalty_freq: self.penalty_freq,
+            penalty_present: self.penalty_present,
+            penalize_nl: self.penalize_nl,
+            ignore_eos: self.ignore_eos,
+            mirostat_tau: self.mirostat_tau,
+            mirostat_eta: self.mirostat_eta,
+        }
     }
 }
 

@@ -69,16 +69,16 @@ pub fn apply_chat_template(model: Model, chat: Vec<(String, String)>) -> Result<
 }
 
 pub struct SamplerConfig {
-    seed: u32,
-    temperature: f32,
-    penalty_last_n: i32,
-    penalty_repeat: f32,
-    penalty_freq: f32,
-    penalty_present: f32,
-    penalize_nl: bool,
-    ignore_eos: bool,
-    mirostat_tau: f32,
-    mirostat_eta: f32,
+    pub seed: u32,
+    pub temperature: f32,
+    pub penalty_last_n: i32,
+    pub penalty_repeat: f32,
+    pub penalty_freq: f32,
+    pub penalty_present: f32,
+    pub penalize_nl: bool,
+    pub ignore_eos: bool,
+    pub mirostat_tau: f32,
+    pub mirostat_eta: f32,
 }
 
 // defaults here match the defaults read from `llama-cli --help`
