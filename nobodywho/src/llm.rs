@@ -39,6 +39,7 @@ pub fn get_model(model_path: &str) -> Result<Arc<LlamaModel>, String> {
     // HACK: only offload anything to the gpu if we can find a dedicated GPU
     //       there seems to be a bug which results in garbage tokens if we over-allocate an integrated GPU
     //       while using the vulkan backend. See: https://github.com/nobodywho-ooo/nobodywho-rs/pull/14
+    println!("loading model from disk");
     if !std::path::Path::new(model_path).exists() {
         return Err(format!("{model_path} does not exist."));
     }
@@ -53,6 +54,7 @@ pub fn get_model(model_path: &str) -> Result<Arc<LlamaModel>, String> {
     let model_params = pin!(model_params);
     let model = LlamaModel::load_from_file(&LLAMA_BACKEND, model_path, &model_params)
         .map_err(|_| format!("Looks like {model_path} is not a valid or supported GGUF model."))?;
+    println!("loaded model from disk");
     Ok(Arc::new(model))
 }
 
@@ -125,34 +127,51 @@ pub fn run_worker<'a>(
     completion_tx: Sender<LLMOutput>,
     sampler_config: SamplerConfig,
 ) {
+    println!("in worker thread");
     let n_threads = std::thread::available_parallelism().unwrap().get() as i32;
     let ctx_params = LlamaContextParams::default()
         .with_n_ctx(std::num::NonZero::new(model.n_ctx_train()))
         .with_n_threads(n_threads)
         .with_n_threads_batch(n_threads);
 
+    println!("making context");
     let mut ctx = model.new_context(&LLAMA_BACKEND, ctx_params).unwrap();
+    println!("made context");
 
     let mut n_cur = 0;
 
+    println!("making sampler");
     let mut sampler = make_sampler(&model, sampler_config)
         .expect("Llama.cpp returned a null pointer when initializing sampler.");
+    println!("made sampler");
 
+    println!("worker getting prompt");
     while let Ok(prompt) = prompt_rx.recv() {
-        let tokens_list = ctx.model.str_to_token(&prompt, AddBos::Always).unwrap();
+        println!("worker got prompt");
 
+        println!("worker making tokens list");
+        let tokens_list = ctx.model.str_to_token(&prompt, AddBos::Always).unwrap();
+        println!("worker made tokens list");
+        println!("got {:?} tokens", tokens_list.len());
+
+        println!("making batch");
         let mut batch = LlamaBatch::new(ctx.n_ctx() as usize, 1);
+        println!("made batch");
 
         // put tokens in the batch
         let last_index = (tokens_list.len() - 1) as i32;
 
+        println!("adding to batch");
         for (i, token) in (0..).zip(tokens_list.into_iter()) {
             // llama_decode will output logits only for the last token of the prompt
             let is_last = i == last_index;
             batch.add(token, n_cur + i, &[0], is_last).unwrap();
         }
+        println!("added to batch");
 
+        println!("decoding");
         ctx.decode(&mut batch).unwrap();
+        println!("decoded");
 
         // main loop
         n_cur += batch.n_tokens();
@@ -164,39 +183,55 @@ pub fn run_worker<'a>(
             // sample the next token
             {
                 // sample the next token
+                println!("sampling token");
                 let new_token_id: LlamaToken = sampler.sample(&ctx, batch.n_tokens() - 1);
+                println!("sampled token");
                 sampler.accept(new_token_id);
 
                 // is it an end of stream?
+                println!("checking end of stream");
                 if new_token_id == ctx.model.token_eos() {
                     batch.clear();
                     batch.add(new_token_id, n_cur, &[0], true).unwrap();
                     completion_tx.send(LLMOutput::Done).unwrap();
+                    println!("end of stream reached");
                     break;
                 }
+                println!("checked end of stream");
 
+                println!("making new tokens bytes");
                 let output_bytes = ctx
                     .model
                     .token_to_bytes(new_token_id, Special::Tokenize)
                     .unwrap();
+                println!("got new token bytes");
 
                 // use `Decoder.decode_to_string()` to avoid the intermediate buffer
                 let mut output_string = String::with_capacity(32);
                 let _decode_result =
                     utf8decoder.decode_to_string(&output_bytes, &mut output_string, false);
+                println!("got new token string: {:?}", output_string);
 
                 // send new token string back to user
+                println!("sending string back");
                 completion_tx.send(LLMOutput::Token(output_string)).unwrap();
+                println!("sent string back");
 
                 // prepare batch or the next decode
+                println!("clearing batch");
                 batch.clear();
+                println!("clared batch");
 
+                println!("adding new token to batch");
                 batch.add(new_token_id, n_cur, &[0], true).unwrap();
+                println!("added new token to batch");
             }
 
             n_cur += 1;
 
+            println!("decoding");
             ctx.decode(&mut batch).unwrap();
+            println!("decoded");
         }
     }
 }

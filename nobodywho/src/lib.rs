@@ -130,6 +130,7 @@ macro_rules! run_model {
             let gd_model_node = $self.model_node.as_mut().ok_or("Model node is not set.")?;
             let mut nobody_model = gd_model_node.bind_mut();
             let model: llm::Model = nobody_model.get_model()?;
+            println!("macro got model");
 
             // get NobodyWhoSampler
             let sampler_config: llm::SamplerConfig =
@@ -139,17 +140,21 @@ macro_rules! run_model {
                 } else {
                     llm::DEFAULT_SAMPLER_CONFIG
                 };
+            println!("macro got sampler");
 
             // make and store channels for communicating with the llm worker thread
             let (prompt_tx, prompt_rx) = std::sync::mpsc::channel::<String>();
             let (completion_tx, completion_rx) = std::sync::mpsc::channel::<llm::LLMOutput>();
             $self.prompt_tx = Some(prompt_tx);
             $self.completion_rx = Some(completion_rx);
+            println!("macro get and set channels");
 
             // start the llm worker
+            println!("macro starting thread");
             std::thread::spawn(move || {
                 run_worker(model, prompt_rx, completion_tx, sampler_config);
             });
+            println!("macro started thread");
 
             Ok(())
         };
@@ -177,12 +182,14 @@ macro_rules! emit_tokens {
             if let Some(rx) = $self.completion_rx.as_ref() {
                 match rx.try_recv() {
                     Ok(llm::LLMOutput::Token(token)) => {
+                        println!("godot got token from worker: {:?}", token);
                         $self
                             .base_mut()
                             .emit_signal("completion_updated", &[Variant::from(token)]);
                     }
                     Ok(llm::LLMOutput::Done) => {
                         $self.base_mut().emit_signal("completion_finished", &[]);
+                        println!("godot got eos from worker");
                     }
                     Err(std::sync::mpsc::TryRecvError::Empty) => {
                         break;
