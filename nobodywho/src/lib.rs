@@ -148,13 +148,7 @@ macro_rules! run_model {
 
             // start the llm worker
             std::thread::spawn(move || {
-                run_worker(
-                    model,
-                    prompt_rx,
-                    completion_tx,
-                    // TODO: find a way to move a sampler (or sampler config) into this thread
-                    sampler_config,
-                );
+                run_worker(model, prompt_rx, completion_tx, sampler_config);
             });
 
             Ok(())
