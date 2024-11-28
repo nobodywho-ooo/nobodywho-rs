@@ -195,6 +195,7 @@ macro_rules! emit_tokens {
                     }
                     Err(std::sync::mpsc::TryRecvError::Disconnected) => {
                         godot_error!("Unexpected: Model channel disconnected");
+                        panic!();
                     }
                 }
             } else {
