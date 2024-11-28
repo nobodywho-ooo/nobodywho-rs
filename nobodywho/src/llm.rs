@@ -12,6 +12,7 @@ use llama_cpp_2::model::{AddBos, Special};
 use llama_cpp_2::sampling::params::LlamaSamplerChainParams;
 use llama_cpp_2::sampling::LlamaSampler;
 use llama_cpp_2::token::LlamaToken;
+use llama_cpp_2::LlamaSamplerError;
 
 static LLAMA_BACKEND: LazyLock<LlamaBackend> =
     LazyLock::new(|| LlamaBackend::init().expect("Failed to initialize llama backend"));
@@ -95,6 +96,29 @@ pub const DEFAULT_SAMPLER_CONFIG: SamplerConfig = SamplerConfig {
     mirostat_eta: 0.1,
 };
 
+fn make_sampler(
+    model: &LlamaModel,
+    config: SamplerConfig,
+) -> Result<LlamaSampler, LlamaSamplerError> {
+    // init mirostat sampler
+    let sampler_params = LlamaSamplerChainParams::default();
+    let sampler = LlamaSampler::new(sampler_params)?
+        .add_penalties(
+            model.n_vocab(),
+            model.token_eos().0,
+            model.token_nl().0,
+            config.penalty_last_n,
+            config.penalty_repeat,
+            config.penalty_freq,
+            config.penalty_present,
+            config.penalize_nl,
+            config.ignore_eos,
+        )
+        .add_temp(config.temperature)
+        .add_mirostat_v2(config.seed, config.mirostat_tau, config.mirostat_eta);
+    Ok(sampler)
+}
+
 pub fn run_worker<'a>(
     model: Arc<LlamaModel>,
     prompt_rx: Receiver<String>,
@@ -110,6 +134,9 @@ pub fn run_worker<'a>(
     let mut ctx = model.new_context(&LLAMA_BACKEND, ctx_params).unwrap();
 
     let mut n_cur = 0;
+
+    let mut sampler = make_sampler(&model, sampler_config)
+        .expect("Llama.cpp returned a null pointer when initializing sampler.");
 
     while let Ok(prompt) = prompt_rx.recv() {
         let tokens_list = ctx.model.str_to_token(&prompt, AddBos::Always).unwrap();
@@ -132,29 +159,6 @@ pub fn run_worker<'a>(
 
         // The `Decoder`
         let mut utf8decoder = encoding_rs::UTF_8.new_decoder();
-
-        // init mirostat sampler
-        let sampler_params = LlamaSamplerChainParams::default();
-        let mut sampler = LlamaSampler::new(sampler_params)
-            .expect("Llama.cpp returned a null pointer when initializing sampler.")
-            // .add_logit_bias(model.n_vocab())
-            .add_penalties(
-                model.n_vocab(),
-                model.token_eos().0,
-                model.token_nl().0,
-                sampler_config.penalty_last_n,
-                sampler_config.penalty_repeat,
-                sampler_config.penalty_freq,
-                sampler_config.penalty_present,
-                sampler_config.penalize_nl,
-                sampler_config.ignore_eos,
-            )
-            .add_temp(sampler_config.temperature)
-            .add_mirostat_v2(
-                sampler_config.seed,
-                sampler_config.mirostat_tau,
-                sampler_config.mirostat_eta,
-            );
 
         loop {
             // sample the next token
@@ -312,5 +316,12 @@ mod tests {
             result.contains("Danish"),
             "Expected completion to contain 'Danish', got: {result}"
         );
+    }
+
+    #[test]
+    fn test_initialize_default_sampler() {
+        let model = get_model(test_model_path!()).expect("Failed loading model");
+        let sampler = make_sampler(&model, DEFAULT_SAMPLER_CONFIG);
+        assert!(sampler.is_ok(), "make_sampler returned an Err");
     }
 }
