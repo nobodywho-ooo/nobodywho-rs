@@ -19,6 +19,7 @@ static LLAMA_BACKEND: LazyLock<LlamaBackend> =
 
 pub enum LLMOutput {
     Token(String),
+    Err(String),
     Done,
 }
 
@@ -119,14 +120,26 @@ fn make_sampler(
     Ok(sampler)
 }
 
-pub fn run_worker<'a>(
+pub fn run_worker(
     model: Arc<LlamaModel>,
     prompt_rx: Receiver<String>,
     completion_tx: Sender<LLMOutput>,
     sampler_config: SamplerConfig,
 ) {
+    // this function is a pretty thin wrapper to send back an `Err` if we get it
+    if let Err(msg) = run_worker_result(model, prompt_rx, &completion_tx, sampler_config) {
+        completion_tx.send(LLMOutput::Err(msg));
+    }
+}
+
+fn run_worker_result(
+    model: Arc<LlamaModel>,
+    prompt_rx: Receiver<String>,
+    completion_tx: &Sender<LLMOutput>,
+    sampler_config: SamplerConfig,
+) -> Result<(), String> {
     let n_threads = std::thread::available_parallelism()
-        .expect("Could not determine number of available threads in system.")
+        .map_err(|_| "Could not determine number of available threads in system.")?
         .get() as i32;
     let n_ctx: u32 = model.n_ctx_train();
     let ctx_params = LlamaContextParams::default()
@@ -136,18 +149,18 @@ pub fn run_worker<'a>(
 
     let mut ctx = model
         .new_context(&LLAMA_BACKEND, ctx_params)
-        .expect("Failed creating new context.");
+        .map_err(|_| "Failed creating new context.")?;
 
     let mut n_cur = 0;
 
     let mut sampler = make_sampler(&model, sampler_config)
-        .expect("Llama.cpp returned a null pointer when initializing sampler.");
+        .map_err(|_| "Llama.cpp returned a null pointer when initializing sampler.")?;
 
     while let Ok(prompt) = prompt_rx.recv() {
         let tokens_list = ctx
             .model
             .str_to_token(&prompt, AddBos::Always)
-            .expect("Failed tokenizing user-provided text. Does it contain weird characters?");
+            .map_err(|_| "Failed tokenizing user-provided text. Does it contain weird characters?")?;
 
         let mut batch = LlamaBatch::new(ctx.n_ctx() as usize, 1);
 
@@ -157,18 +170,15 @@ pub fn run_worker<'a>(
         for (i, token) in (0..).zip(tokens_list.into_iter()) {
             // llama_decode will output logits only for the last token of the prompt
             let is_last = i == last_index;
-            batch
-                .add(token, n_cur + i, &[0], is_last)
-                .expect("Failed adding user-provided text to batch. Was the text longer than the maximum context?");
+            batch.add(token, n_cur + i, &[0], is_last).map_err(|_| "Failed adding user-provided text to batch. Was the text longer than the maximum context?")?;
         }
 
-        ctx.decode(&mut batch)
-            .expect("Llama.cpp failed decoding batch.");
+        ctx.decode(&mut batch).map_err(|_| "Llama.cpp failed decoding batch.")?;
 
         // main loop
         n_cur += batch.n_tokens();
-        if n_ctx <= n_cur.try_into().expect("n_cur does not fit in u32") {
-            panic!("Maximum context length exceeded");
+        if n_ctx <= n_cur.try_into().map_err(|_| "n_cur does not fit in u32")? {
+            return Err("Maximum context length exceeded".to_string());
         }
 
         // The `Decoder`
@@ -186,15 +196,15 @@ pub fn run_worker<'a>(
                     batch.clear();
                     batch
                         .add(new_token_id, n_cur, &[0], true)
-                        .expect("Failed adding EOS token to batch.");
-                    completion_tx.send(LLMOutput::Done).expect("Failed sending newly generated token out. Was the game engine node removed?");
+                        .map_err(|_| "Failed adding EOS token to batch.")?;
+                    completion_tx.send(LLMOutput::Done).map_err(|_| "Failed sending newly generated token out. Was the game engine node removed?")?;
                     break;
                 }
 
                 let output_bytes = ctx
                     .model
                     .token_to_bytes(new_token_id, Special::Tokenize)
-                    .expect("Could not de-tokenize newly generated token.");
+                    .map_err(|_| "Could not de-tokenize newly generated token.")?;
 
                 // use `Decoder.decode_to_string()` to avoid the intermediate buffer
                 let mut output_string = String::with_capacity(32);
@@ -202,27 +212,28 @@ pub fn run_worker<'a>(
                     utf8decoder.decode_to_string(&output_bytes, &mut output_string, false);
 
                 // send new token string back to user
-                completion_tx.send(LLMOutput::Token(output_string)).expect(
+                completion_tx.send(LLMOutput::Token(output_string)).map_err(|_|
                     "Failed sending newly generated token out. Was the game engine node removed?",
-                );
+                )?;
 
                 // prepare batch or the next decode
                 batch.clear();
 
                 batch
                     .add(new_token_id, n_cur, &[0], true)
-                    .expect("Failed adding newly generated token to batch");
+                    .map_err(|_| "Failed adding newly generated token to batch")?;
             }
 
             n_cur += 1;
-            if n_ctx <= n_cur.try_into().expect("n_cur does not fit in u32") {
-                panic!("Maximum context length exceeded");
+            if n_ctx <= n_cur.try_into().map_err(|_| "n_cur does not fit in u32")? {
+                return Err("Maximum context length exceeded".to_string());
             }
 
             ctx.decode(&mut batch)
-                .expect("Llama.cpp failed decoding batch.");
+                .map_err(|_| "Llama.cpp failed decoding batch.")?;
         }
     }
+    unreachable!();
 }
 
 macro_rules! test_model_path {
