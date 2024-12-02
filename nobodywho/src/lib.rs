@@ -188,8 +188,10 @@ macro_rules! emit_tokens {
                         break;
                     }
                     Err(std::sync::mpsc::TryRecvError::Disconnected) => {
-                        godot_error!("Unexpected: Model channel disconnected");
-                        panic!();
+                        godot_error!("Model output channel died. Did the LLM worker crash?");
+                        // set hanging channel to None
+                        // this prevents repeating the dead channel error message foreve
+                        $self.completion_rx = None;
                     }
                 }
             } else {
