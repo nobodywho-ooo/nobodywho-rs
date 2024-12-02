@@ -1,10 +1,10 @@
 use std::pin::pin;
-use std::sync::mpsc::{Receiver, Sender, SendError};
+use std::sync::mpsc::{Receiver, SendError, Sender};
 use std::sync::{Arc, LazyLock};
 
 use llama_cpp_2::context::params::LlamaContextParams;
 use llama_cpp_2::llama_backend::LlamaBackend;
-use llama_cpp_2::llama_batch::{LlamaBatch, BatchAddError};
+use llama_cpp_2::llama_batch::{BatchAddError, LlamaBatch};
 use llama_cpp_2::model::params::LlamaModelParams;
 use llama_cpp_2::model::LlamaChatMessage;
 use llama_cpp_2::model::LlamaModel;
@@ -12,14 +12,13 @@ use llama_cpp_2::model::{AddBos, Special};
 use llama_cpp_2::sampling::params::LlamaSamplerChainParams;
 use llama_cpp_2::sampling::LlamaSampler;
 use llama_cpp_2::token::LlamaToken;
-use llama_cpp_2::{LlamaSamplerError, LlamaContextLoadError, StringToTokenError, TokenToStringError, DecodeError};
 
 static LLAMA_BACKEND: LazyLock<LlamaBackend> =
     LazyLock::new(|| LlamaBackend::init().expect("Failed to initialize llama backend"));
 
 pub enum LLMOutput {
     Token(String),
-    Err(WorkerError),
+    FatalErr(WorkerError),
     Done,
 }
 
@@ -35,7 +34,6 @@ pub fn has_discrete_gpu() -> bool {
         .into_iter()
         .any(|a| a.get_info().device_type == wgpu::DeviceType::DiscreteGpu)
 }
-
 
 #[derive(Debug, thiserror::Error)]
 pub enum LoadModelError {
@@ -61,8 +59,14 @@ pub fn get_model(model_path: &str) -> Result<Arc<LlamaModel>, LoadModelError> {
         },
     );
     let model_params = pin!(model_params);
-    let model = LlamaModel::load_from_file(&LLAMA_BACKEND, model_path, &model_params)
-        .map_err(|e| LoadModelError::InvalidModel(format!("Bad model path: {} - Llama.cpp error: {}", model_path.to_string(), e.to_string())))?;
+    let model =
+        LlamaModel::load_from_file(&LLAMA_BACKEND, model_path, &model_params).map_err(|e| {
+            LoadModelError::InvalidModel(format!(
+                "Bad model path: {} - Llama.cpp error: {}",
+                model_path.to_string(),
+                e.to_string()
+            ))
+        })?;
     Ok(Arc::new(model))
 }
 
@@ -109,7 +113,7 @@ pub const DEFAULT_SAMPLER_CONFIG: SamplerConfig = SamplerConfig {
 fn make_sampler(
     model: &LlamaModel,
     config: SamplerConfig,
-) -> Result<LlamaSampler, LlamaSamplerError> {
+) -> Result<LlamaSampler, llama_cpp_2::LlamaSamplerError> {
     // init mirostat sampler
     let sampler_params = LlamaSamplerChainParams::default();
     let sampler = LlamaSampler::new(sampler_params)?
@@ -135,28 +139,28 @@ pub enum WorkerError {
     ThreadCountError(#[from] std::io::Error),
 
     #[error("Could not create context: {0}")]
-    CreateContextError(#[from] LlamaContextLoadError),
+    CreateContextError(#[from] llama_cpp_2::LlamaContextLoadError),
 
     #[error("Could not create sampler: {0}")]
-    CreateSamplerError(#[from] LlamaSamplerError),
+    CreateSamplerError(#[from] llama_cpp_2::LlamaSamplerError),
 
     #[error("Could not tokenize string: {0}")]
-    TokenizerError(#[from] StringToTokenError),
+    TokenizerError(#[from] llama_cpp_2::StringToTokenError),
 
     #[error("Could not detokenize string: {0}")]
-    Detokenize(#[from] TokenToStringError),
+    Detokenize(#[from] llama_cpp_2::TokenToStringError),
 
     #[error("Could not add token to batch: {0}")]
-    BatchAddError(#[from] BatchAddError),
+    BatchAddError(#[from] llama_cpp_2::llama_batch::BatchAddError),
+
+    #[error("Llama.cpp failed decoding: {0}")]
+    DecodeError(#[from] llama_cpp_2::DecodeError),
 
     #[error("Context exceeded maximum length")]
     ContextLengthExceededError,
 
     #[error("Could not send newly generated token out to the game engine.")]
     SendError, // this is actually a SendError<LLMOutput>, but that becomes recursive and weord.
-
-    #[error("Llama.cpp failed decoding: {0}")]
-    DecodeError(#[from] DecodeError)
 }
 
 pub fn run_worker(
@@ -167,7 +171,9 @@ pub fn run_worker(
 ) {
     // this function is a pretty thin wrapper to send back an `Err` if we get it
     if let Err(msg) = run_worker_result(model, prompt_rx, &completion_tx, sampler_config) {
-        completion_tx.send(LLMOutput::Err(msg));
+        completion_tx
+            .send(LLMOutput::FatalErr(msg))
+            .expect("Could not send llm worker fatal error back to consumer.");
     }
 }
 
@@ -177,8 +183,7 @@ fn run_worker_result(
     completion_tx: &Sender<LLMOutput>,
     sampler_config: SamplerConfig,
 ) -> Result<(), WorkerError> {
-    let n_threads = std::thread::available_parallelism()?
-        .get() as i32;
+    let n_threads = std::thread::available_parallelism()?.get() as i32;
     let n_ctx: u32 = model.n_ctx_train();
     let ctx_params = LlamaContextParams::default()
         .with_n_ctx(std::num::NonZero::new(n_ctx))
@@ -227,7 +232,9 @@ fn run_worker_result(
                 if new_token_id == ctx.model.token_eos() {
                     batch.clear();
                     batch.add(new_token_id, n_cur, &[0], true)?;
-                    completion_tx.send(LLMOutput::Done).map_err(|_| WorkerError::SendError)?;
+                    completion_tx
+                        .send(LLMOutput::Done)
+                        .map_err(|_| WorkerError::SendError)?;
                     break;
                 }
 
@@ -239,7 +246,9 @@ fn run_worker_result(
                     utf8decoder.decode_to_string(&output_bytes, &mut output_string, false);
 
                 // send new token string back to user
-                completion_tx.send(LLMOutput::Token(output_string)).map_err(|_| WorkerError::SendError)?;
+                completion_tx
+                    .send(LLMOutput::Token(output_string))
+                    .map_err(|_| WorkerError::SendError)?;
 
                 // prepare batch or the next decode
                 batch.clear();

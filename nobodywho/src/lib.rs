@@ -184,7 +184,7 @@ macro_rules! emit_tokens {
                     Ok(llm::LLMOutput::Done) => {
                         $self.base_mut().emit_signal("completion_finished", &[]);
                     }
-                    Ok(llm::LLMOutput::Err(msg)) => {
+                    Ok(llm::LLMOutput::FatalErr(msg)) => {
                         godot_error!("Model worker crashed: {msg}");
                     }
                     Err(std::sync::mpsc::TryRecvError::Empty) => {
