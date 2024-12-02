@@ -98,7 +98,7 @@ impl INode for NobodyWhoModel {
 
 impl NobodyWhoModel {
     // memoized model loader
-    fn get_model(&mut self) -> Result<llm::Model, String> {
+    fn get_model(&mut self) -> Result<llm::Model, llm::LoadModelError> {
         if let Some(model) = &self.model {
             return Ok(model.clone());
         }
@@ -113,9 +113,9 @@ impl NobodyWhoModel {
                 self.model = Some(model.clone());
                 Ok(model.clone())
             }
-            Err(msg) => {
-                godot_error!("Could not load model: {msg}");
-                Err(msg)
+            Err(err) => {
+                godot_error!("Could not load model: {:?}", err.to_string());
+                Err(err)
             }
         }
     }
@@ -129,7 +129,7 @@ macro_rules! run_model {
             // get NobodyWhoModel
             let gd_model_node = $self.model_node.as_mut().ok_or("Model node is not set.")?;
             let mut nobody_model = gd_model_node.bind_mut();
-            let model: llm::Model = nobody_model.get_model()?;
+            let model: llm::Model = nobody_model.get_model().map_err(|e| e.to_string())?;
 
             // get NobodyWhoSampler
             let sampler_config: llm::SamplerConfig =
@@ -184,12 +184,17 @@ macro_rules! emit_tokens {
                     Ok(llm::LLMOutput::Done) => {
                         $self.base_mut().emit_signal("completion_finished", &[]);
                     }
+                    Ok(llm::LLMOutput::FatalErr(msg)) => {
+                        godot_error!("Model worker crashed: {msg}");
+                    }
                     Err(std::sync::mpsc::TryRecvError::Empty) => {
                         break;
                     }
                     Err(std::sync::mpsc::TryRecvError::Disconnected) => {
-                        godot_error!("Unexpected: Model channel disconnected");
-                        panic!();
+                        godot_error!("Model output channel died. Did the LLM worker crash?");
+                        // set hanging channel to None
+                        // this prevents repeating the dead channel error message foreve
+                        $self.completion_rx = None;
                     }
                 }
             } else {

@@ -14,6 +14,7 @@ godot = { git = "https://github.com/godot-rust/gdext", branch = "master", featur
 llama-cpp-2 = { version = "0.1.84" }
 rusqlite = { version = "0.32.1", features = ["bundled"] }
 sqlite-vec = "0.1.5"
+thiserror = "2.0.3"
 wgpu = "23.0.0"
 
 [target.'cfg(not(target_os = "macos"))'.dependencies]
