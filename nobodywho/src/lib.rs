@@ -80,6 +80,9 @@ struct NobodyWhoModel {
     #[export(file = "*.gguf")]
     model_path: GString,
 
+    #[export]
+    try_to_use_gpu: bool,
+
     model: Option<llm::Model>,
 }
 
@@ -91,6 +94,7 @@ impl INode for NobodyWhoModel {
 
         Self {
             model_path: model_path.into(),
+            try_to_use_gpu: true,
             model: None,
         }
     }
@@ -108,7 +112,7 @@ impl NobodyWhoModel {
             .globalize_path(&self.model_path.clone())
             .into();
 
-        match llm::get_model(model_path_string.as_str()) {
+        match llm::get_model(model_path_string.as_str(), self.try_to_use_gpu) {
             Ok(model) => {
                 self.model = Some(model.clone());
                 Ok(model.clone())
