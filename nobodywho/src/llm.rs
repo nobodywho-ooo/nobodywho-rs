@@ -45,7 +45,7 @@ pub enum LoadModelError {
 
 pub fn get_model(
     model_path: &str,
-    try_to_use_gpu: bool,
+    use_gpu_if_available: bool,
 ) -> Result<Arc<LlamaModel>, LoadModelError> {
     // HACK: only offload anything to the gpu if we can find a dedicated GPU
     //       there seems to be a bug which results in garbage tokens if we over-allocate an integrated GPU
@@ -55,7 +55,7 @@ pub fn get_model(
     }
 
     let model_params = LlamaModelParams::default().with_n_gpu_layers(
-        if try_to_use_gpu && (has_discrete_gpu() || cfg!(target_os = "macos")) {
+        if use_gpu_if_available && (has_discrete_gpu() || cfg!(target_os = "macos")) {
             1000000
         } else {
             0
