@@ -163,13 +163,17 @@ macro_rules! run_model {
 }
 
 macro_rules! send_text {
-    ($self:ident, $text:expr) => {
+    ($self:ident, $text:expr) => {{
+        if $self.prompt_tx.is_none() {
+            godot_warn!("Model context not initialized yet. Initializing now...");
+            run_model!($self);
+        }
         if let Some(tx) = $self.prompt_tx.as_ref() {
             tx.send($text).unwrap();
         } else {
-            godot_error!("Model not initialized. Call `run` first");
+            unreachable!("prompt_tx should always be set after run_model!");
         }
-    };
+    }};
 }
 
 macro_rules! emit_tokens {
@@ -244,7 +248,7 @@ impl INode for NobodyWhoPromptCompletion {
 #[godot_api]
 impl NobodyWhoPromptCompletion {
     #[func]
-    fn run(&mut self) {
+    fn start_model_worker(&mut self) {
         run_model!(self)
     }
 
@@ -306,7 +310,7 @@ impl INode for NobodyWhoPromptChat {
 #[godot_api]
 impl NobodyWhoPromptChat {
     #[func]
-    fn run(&mut self) {
+    fn start_model_worker(&mut self) {
         run_model!(self)
     }
 
@@ -315,14 +319,15 @@ impl NobodyWhoPromptChat {
         // simple closure that returns Err(String) if something fails
         let say_result = || -> Result<(), String> {
             // get the model instance
-            let gd_model_node = self.model_node.as_mut().ok_or(
-                "No model node provided. Remember to set a model node on NobodyWhoPromptChat.",
-            )?;
-            let nobody_model: GdRef<NobodyWhoModel> = gd_model_node.bind();
-            let model: llm::Model = nobody_model
-                .model
-                .clone()
-                .ok_or("Could not access LlamaModel from model node.".to_string())?;
+            let model: llm::Model = {
+                let gd_model_node = self.model_node.as_mut().ok_or(
+                    "No model node provided. Remember to set a model node on NobodyWhoPromptChat.",
+                )?;
+                let mut nobody_model: GdMut<NobodyWhoModel> = gd_model_node.bind_mut();
+                nobody_model
+                    .get_model()
+                    .map_err(|_| "Could not access LlamaModel from model node.".to_string())?
+            };
 
             // make a chat string
             let mut messages: Vec<(String, String)> = vec![];
