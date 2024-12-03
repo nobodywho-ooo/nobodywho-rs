@@ -291,7 +291,13 @@ mod tests {
         let (completion_tx, completion_rx) = std::sync::mpsc::channel();
 
         std::thread::spawn(move || {
-            run_worker(model, prompt_rx, completion_tx, DEFAULT_SAMPLER_CONFIG)
+            run_worker(
+                model,
+                prompt_rx,
+                completion_tx,
+                DEFAULT_SAMPLER_CONFIG,
+                4096,
+            )
         });
 
         prompt_tx.send("Count to five: 1, 2, ".to_string()).unwrap();
@@ -323,7 +329,15 @@ mod tests {
         let (prompt_tx, prompt_rx) = std::sync::mpsc::channel();
         let (completion_tx, completion_rx) = std::sync::mpsc::channel();
 
-        std::thread::spawn(|| run_worker(model, prompt_rx, completion_tx, DEFAULT_SAMPLER_CONFIG));
+        std::thread::spawn(|| {
+            run_worker(
+                model,
+                prompt_rx,
+                completion_tx,
+                DEFAULT_SAMPLER_CONFIG,
+                4096,
+            )
+        });
 
         let chat: Vec<LlamaChatMessage> = vec![
             LlamaChatMessage::new(
