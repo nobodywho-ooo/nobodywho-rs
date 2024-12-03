@@ -312,8 +312,6 @@ impl NobodyWhoPromptChat {
 
     #[func]
     fn say(&mut self, message: String) {
-        // TODO: also send system prompt on first message
-
         // simple closure that returns Err(String) if something fails
         let say_result = || -> Result<(), String> {
             // get the model instance
@@ -334,7 +332,6 @@ impl NobodyWhoPromptChat {
             }
             messages.push(("user".to_string(), message));
             let text: String = llm::apply_chat_template(model, messages)?;
-            println!("CHAT PROMPT: {text}");
             send_text!(self, text);
             Ok::<(), String>(())
         };
