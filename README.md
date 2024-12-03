@@ -16,7 +16,7 @@ You can install it from inside the Godot editor: In Godot 4.3+, go to AssetLib a
 
 ## Getting started
 
-The plugin does not include a large language model (LLM). You need to provide an LLM in the GGUF file format. A good place to start is something like [LLama 3.2 3B](https://huggingface.co/bartowski/Llama-3.2-3B-Instruct-GGUF/resolve/main/Llama-3.2-3B-Instruct-Q4_K_M.gguf)
+The plugin does not include a large language model (LLM). You need to provide an LLM in the GGUF file format. A good place to start is something like [Gemma 2 2B](https://huggingface.co/bartowski/gemma-2-2b-it-GGUF/resolve/main/gemma-2-2b-it-Q4_K_M.gguf)
 
 Once you have a GGUF model file, you can add a `NobodyWhoModel` node to your Godot scene. On this node, set the model file to the GGUF model you just downloaded.
 
