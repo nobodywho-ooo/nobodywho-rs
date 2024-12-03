@@ -3,6 +3,7 @@ use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, LazyLock};
 
 use llama_cpp_2::context::params::LlamaContextParams;
+use llama_cpp_2::context::LlamaContext;
 use llama_cpp_2::llama_backend::LlamaBackend;
 use llama_cpp_2::llama_batch::LlamaBatch;
 use llama_cpp_2::model::params::LlamaModelParams;
@@ -177,24 +178,42 @@ pub fn run_worker(
     }
 }
 
+fn new_context(
+    model: &Arc<LlamaModel>,
+    n_threads: i32,
+    n_ctx: u32,
+) -> Result<LlamaContext, llama_cpp_2::LlamaContextLoadError> {
+    // HACK: halve context length until there is enough room
+    let ctx_params = LlamaContextParams::default()
+        .with_n_ctx(std::num::NonZero::new(n_ctx))
+        .with_n_threads(n_threads)
+        .with_n_threads_batch(n_threads);
+
+    match model.new_context(&LLAMA_BACKEND, ctx_params) {
+        Ok(ctx) => Ok(ctx),
+        Err(llama_cpp_2::LlamaContextLoadError::NullReturn) => {
+            println!(
+                "Warning: failed allocating context with length {:?}, trying with {:?}",
+                n_ctx,
+                n_ctx / 2
+            );
+            new_context(model, n_threads, n_ctx / 2)
+        }
+    }
+}
+
 fn run_worker_result(
     model: Arc<LlamaModel>,
     prompt_rx: Receiver<String>,
     completion_tx: &Sender<LLMOutput>,
     sampler_config: SamplerConfig,
 ) -> Result<(), WorkerError> {
-    let n_threads = std::thread::available_parallelism()?.get() as i32;
-    let n_ctx: u32 = model.n_ctx_train();
-    let ctx_params = LlamaContextParams::default()
-        .with_n_ctx(std::num::NonZero::new(n_ctx))
-        .with_n_threads(n_threads)
-        .with_n_threads_batch(n_threads);
-
-    let mut ctx = model.new_context(&LLAMA_BACKEND, ctx_params)?;
-
     let mut n_cur = 0;
 
     let mut sampler = make_sampler(&model, sampler_config)?;
+    let n_threads = std::thread::available_parallelism()?.get() as i32;
+    let n_ctx: u32 = model.n_ctx_train();
+    let mut ctx = new_context(&model, n_threads, n_ctx)?;
 
     while let Ok(prompt) = prompt_rx.recv() {
         let tokens_list = ctx.model.str_to_token(&prompt, AddBos::Always)?;
