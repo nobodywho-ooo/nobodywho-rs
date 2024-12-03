@@ -168,9 +168,10 @@ pub fn run_worker(
     prompt_rx: Receiver<String>,
     completion_tx: Sender<LLMOutput>,
     sampler_config: SamplerConfig,
+    n_ctx: u32,
 ) {
     // this function is a pretty thin wrapper to send back an `Err` if we get it
-    if let Err(msg) = run_worker_result(model, prompt_rx, &completion_tx, sampler_config) {
+    if let Err(msg) = run_worker_result(model, prompt_rx, &completion_tx, sampler_config, n_ctx) {
         completion_tx
             .send(LLMOutput::FatalErr(msg))
             .expect("Could not send llm worker fatal error back to consumer.");
@@ -182,9 +183,10 @@ fn run_worker_result(
     prompt_rx: Receiver<String>,
     completion_tx: &Sender<LLMOutput>,
     sampler_config: SamplerConfig,
+    n_ctx: u32,
 ) -> Result<(), WorkerError> {
     let n_threads = std::thread::available_parallelism()?.get() as i32;
-    let n_ctx: u32 = model.n_ctx_train();
+    let n_ctx: u32 = std::cmp::min(n_ctx, model.n_ctx_train());
     let ctx_params = LlamaContextParams::default()
         .with_n_ctx(std::num::NonZero::new(n_ctx))
         .with_n_threads(n_threads)

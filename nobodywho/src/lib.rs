@@ -147,8 +147,9 @@ macro_rules! run_model {
             $self.completion_rx = Some(completion_rx);
 
             // start the llm worker
+            let n_ctx = $self.context_length;
             std::thread::spawn(move || {
-                run_worker(model, prompt_rx, completion_tx, sampler_config);
+                run_worker(model, prompt_rx, completion_tx, sampler_config, n_ctx);
             });
 
             Ok(())
@@ -213,6 +214,9 @@ struct NobodyWhoPromptCompletion {
     #[export]
     sampler: Option<Gd<NobodyWhoSampler>>,
 
+    #[export]
+    context_length: u32,
+
     completion_rx: Option<Receiver<llm::LLMOutput>>,
     prompt_tx: Option<Sender<String>>,
 
@@ -225,6 +229,7 @@ impl INode for NobodyWhoPromptCompletion {
         Self {
             model_node: None,
             sampler: None,
+            context_length: 4096,
             completion_rx: None,
             prompt_tx: None,
             base,
@@ -269,6 +274,9 @@ struct NobodyWhoPromptChat {
     prompt: GString,
     sent_prompt: bool,
 
+    #[export]
+    context_length: u32,
+
     prompt_tx: Option<Sender<String>>,
     completion_rx: Option<Receiver<llm::LLMOutput>>,
 
@@ -283,6 +291,7 @@ impl INode for NobodyWhoPromptChat {
             sampler: None,
             prompt: "".into(),
             sent_prompt: false,
+            context_length: 4096,
             prompt_tx: None,
             completion_rx: None,
             base,
