@@ -293,28 +293,27 @@ fn run_completion_worker_result(
     unreachable!();
 }
 
-pub enum EmbeddingsOutput {
-    Embedding(Vec<f32>),
-    FatalErr(WorkerError),
+pub struct EmbeddingsRequest {
+    pub text: String,
+    pub respond_to: Sender<Vec<f32>>,
 }
 
 pub fn run_embedding_worker(
     model: Arc<LlamaModel>,
-    prompt_rx: Receiver<String>,
-    embeddings_tx: Sender<EmbeddingsOutput>,
+    request_rx: Receiver<EmbeddingsRequest>,
+    error_tx: Sender<WorkerError>,
 ) {
     // this function is a pretty thin wrapper to send back an `Err` if we get it
-    if let Err(msg) = run_embedding_worker_result(model, prompt_rx, &embeddings_tx) {
-        embeddings_tx
-            .send(EmbeddingsOutput::FatalErr(msg))
+    if let Err(msg) = run_embedding_worker_result(model, request_rx) {
+        error_tx
+            .send(msg)
             .expect("Could not send llm worker fatal error back to consumer.");
     }
 }
 
 pub fn run_embedding_worker_result(
     model: Arc<LlamaModel>,
-    prompt_rx: Receiver<String>,
-    embeddings_tx: &Sender<EmbeddingsOutput>,
+    request_rx: Receiver<EmbeddingsRequest>,
 ) -> Result<(), WorkerError> {
     let n_threads = std::thread::available_parallelism()?.get() as i32;
     let ctx_params = LlamaContextParams::default()
@@ -323,10 +322,11 @@ pub fn run_embedding_worker_result(
 
     let mut ctx = model.new_context(&LLAMA_BACKEND, ctx_params)?;
 
-    while let Ok(prompt) = prompt_rx.recv() {
+    while let Ok(request) = request_rx.recv() {
+        println!("got request: {:?}", request.text);
         let mut batch = LlamaBatch::new(ctx.n_ctx() as usize, 1);
 
-        let tokens_list = ctx.model.str_to_token(&prompt, AddBos::Always)?;
+        let tokens_list = ctx.model.str_to_token(&request.text, AddBos::Always)?;
 
         batch
             .add_sequence(&tokens_list, 0, false)
@@ -337,9 +337,11 @@ pub fn run_embedding_worker_result(
         ctx.decode(&mut batch)?;
 
         let embedding = ctx.embeddings_seq_ith(0).unwrap().to_vec();
+        println!("got embedding: {:?}", embedding);
 
-        embeddings_tx
-            .send(EmbeddingsOutput::Embedding(embedding))
+        request
+            .respond_to
+            .send(embedding)
             .map_err(|_| WorkerError::SendError)?;
     }
     Ok(())
