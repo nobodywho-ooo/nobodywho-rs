@@ -248,7 +248,7 @@ impl INode for NobodyWhoPromptCompletion {
 #[godot_api]
 impl NobodyWhoPromptCompletion {
     #[func]
-    fn start_model_worker(&mut self) {
+    fn start_worker(&mut self) {
         run_model!(self)
     }
 
@@ -310,7 +310,7 @@ impl INode for NobodyWhoPromptChat {
 #[godot_api]
 impl NobodyWhoPromptChat {
     #[func]
-    fn start_model_worker(&mut self) {
+    fn start_worker(&mut self) {
         run_model!(self)
     }
 
