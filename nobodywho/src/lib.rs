@@ -3,7 +3,7 @@ mod llm;
 
 use godot::classes::{INode, ProjectSettings};
 use godot::prelude::*;
-use llm::run_worker;
+use llm::{run_completion_worker, run_embedding_worker};
 use std::sync::mpsc::{Receiver, Sender};
 
 struct NobodyWhoExtension;
@@ -149,12 +149,11 @@ macro_rules! run_model {
             // start the llm worker
             let n_ctx = $self.context_length;
             std::thread::spawn(move || {
-                run_worker(model, prompt_rx, completion_tx, sampler_config, n_ctx);
+                run_completion_worker(model, prompt_rx, completion_tx, sampler_config, n_ctx);
             });
 
             Ok(())
         };
-
         // run it and show error in godot if it fails
         if let Err(msg) = run_result() {
             godot_error!("Error running model: {}", msg);
@@ -347,4 +346,157 @@ impl NobodyWhoPromptChat {
 
     #[signal]
     fn completion_finished();
+}
+
+#[derive(GodotClass)]
+#[class(base=RefCounted)]
+struct NobodyWhoEmbeddingResponse {
+    embedding_rx: Option<Receiver<Vec<f32>>>,
+    base: Base<RefCounted>,
+}
+
+#[godot_api]
+impl IRefCounted for NobodyWhoEmbeddingResponse {
+    fn init(base: Base<RefCounted>) -> Self {
+        println!("response init");
+        Self {
+            embedding_rx: None,
+            base,
+        }
+    }
+}
+
+#[godot_api]
+impl NobodyWhoEmbeddingResponse {
+    fn set_embedding_rx(&mut self, rx: Receiver<Vec<f32>>) {
+        self.embedding_rx = Some(rx);
+    }
+
+    fn poll(&mut self) -> bool {
+        if let Some(rx) = self.embedding_rx.as_ref() {
+            println!("response poll");
+            match rx.try_recv() {
+                Ok(embedding) => {
+                    println!("node got: {:?}", embedding);
+                    self.base_mut().emit_signal(
+                        "embedding_finished",
+                        &[PackedFloat32Array::from(embedding).to_variant()],
+                    );
+                    return true;
+                }
+                Err(std::sync::mpsc::TryRecvError::Empty) => {
+                    return false;
+                }
+                Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                    godot_error!("Embedding worker died while waiting for a response");
+                    self.embedding_rx = None;
+                    return false;
+                }
+            }
+        }
+        false
+    }
+
+    #[signal]
+    fn embedding_finished();
+}
+
+#[derive(GodotClass)]
+#[class(base=Node)]
+struct NobodyWhoEmbedding {
+    #[export]
+    model_node: Option<Gd<NobodyWhoModel>>,
+
+    request_tx: Option<Sender<llm::EmbeddingsRequest>>,
+    error_rx: Option<Receiver<llm::WorkerError>>,
+
+    responses: Vec<Gd<NobodyWhoEmbeddingResponse>>,
+
+    base: Base<Node>,
+}
+
+#[godot_api]
+impl INode for NobodyWhoEmbedding {
+    fn init(base: Base<Node>) -> Self {
+        Self {
+            model_node: None,
+            request_tx: None,
+            error_rx: None,
+            responses: vec![],
+            base,
+        }
+    }
+
+    fn physics_process(&mut self, _delta: f64) {
+        loop {
+            if let Some(rx) = self.error_rx.as_ref() {
+                match rx.try_recv() {
+                    Ok(errmsg) => {
+                        godot_error!("Embeddings worker crashed: {errmsg}");
+                    }
+                    Err(std::sync::mpsc::TryRecvError::Empty) => {
+                        break;
+                    }
+                    Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                        godot_error!("Unexpected: Embeddigns worker channel disconnected");
+                        self.error_rx = None; // un-set here to avoid spamming error message
+                    }
+                }
+            } else {
+                break;
+            }
+        }
+
+        // for response in &mut self.responses {
+        //     response.bind_mut().poll();
+        // }
+        // TODO: it works like this, but leaks EmbeddingResponse objects
+        //       we could remove them from the vec
+        //       but somehow that kills the channel
+        //       ehhh fix
+        self.responses.retain_mut(|resp| resp.bind_mut().poll())
+    }
+}
+
+#[godot_api]
+impl NobodyWhoEmbedding {
+    #[func]
+    fn run(&mut self) {
+        let gd_model_node = self.model_node.as_mut().expect("Model node is not set.");
+        let mut nobody_model: GdMut<NobodyWhoModel> = gd_model_node.bind_mut();
+        let model: llm::Model = nobody_model
+            .get_model()
+            .expect("Could not access NobodyWhoModel.");
+
+        // make and store channels for communicating with the llm worker thread
+        let (request_tx, request_rx) = std::sync::mpsc::channel();
+        let (error_tx, error_rx) = std::sync::mpsc::channel();
+        self.request_tx = Some(request_tx);
+        self.error_rx = Some(error_rx);
+
+        std::thread::spawn(move || {
+            run_embedding_worker(model, request_rx, error_tx);
+        });
+    }
+
+    #[func]
+    fn embed(&mut self, text: String) -> Signal {
+        // send_text!(self, text);
+        // returns signal, so that this you can `var vec = await embed("Hello, world!")`
+        let (embedding_tx, embedding_rx) = std::sync::mpsc::channel();
+        if let Some(tx) = &self.request_tx {
+            tx.send(llm::EmbeddingsRequest {
+                text,
+                respond_to: embedding_tx,
+            })
+            .expect("fuck");
+        }
+        let mut response_node: Gd<NobodyWhoEmbeddingResponse> =
+            NobodyWhoEmbeddingResponse::new_gd();
+        response_node.bind_mut().set_embedding_rx(embedding_rx);
+        let signal =
+            godot::builtin::Signal::from_object_signal(&response_node, "embedding_finished");
+        self.responses.push(response_node);
+        return signal;
+    }
 }

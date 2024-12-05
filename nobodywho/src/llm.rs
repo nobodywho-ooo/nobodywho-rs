@@ -163,7 +163,7 @@ pub enum WorkerError {
     SendError, // this is actually a SendError<LLMOutput>, but that becomes recursive and weord.
 }
 
-pub fn run_worker(
+pub fn run_completion_worker(
     model: Arc<LlamaModel>,
     prompt_rx: Receiver<String>,
     completion_tx: Sender<LLMOutput>,
@@ -171,14 +171,16 @@ pub fn run_worker(
     n_ctx: u32,
 ) {
     // this function is a pretty thin wrapper to send back an `Err` if we get it
-    if let Err(msg) = run_worker_result(model, prompt_rx, &completion_tx, sampler_config, n_ctx) {
+    if let Err(msg) =
+        run_completion_worker_result(model, prompt_rx, &completion_tx, sampler_config, n_ctx)
+    {
         completion_tx
             .send(LLMOutput::FatalErr(msg))
             .expect("Could not send llm worker fatal error back to consumer.");
     }
 }
 
-fn run_worker_result(
+fn run_completion_worker_result(
     model: Arc<LlamaModel>,
     prompt_rx: Receiver<String>,
     completion_tx: &Sender<LLMOutput>,
@@ -269,10 +271,86 @@ fn run_worker_result(
     unreachable!();
 }
 
+pub struct EmbeddingsRequest {
+    pub text: String,
+    pub respond_to: Sender<Vec<f32>>,
+}
+
+pub fn run_embedding_worker(
+    model: Arc<LlamaModel>,
+    request_rx: Receiver<EmbeddingsRequest>,
+    error_tx: Sender<WorkerError>,
+) {
+    // this function is a pretty thin wrapper to send back an `Err` if we get it
+    if let Err(msg) = run_embedding_worker_result(model, request_rx) {
+        error_tx
+            .send(msg)
+            .expect("Could not send llm worker fatal error back to consumer.");
+    }
+}
+
+pub fn run_embedding_worker_result(
+    model: Arc<LlamaModel>,
+    request_rx: Receiver<EmbeddingsRequest>,
+) -> Result<(), WorkerError> {
+    let n_threads = std::thread::available_parallelism()?.get() as i32;
+    let ctx_params = LlamaContextParams::default()
+        .with_n_threads(n_threads)
+        .with_embeddings(true);
+
+    let mut ctx = model.new_context(&LLAMA_BACKEND, ctx_params)?;
+
+    while let Ok(request) = request_rx.recv() {
+        println!("got request: {:?}", request.text);
+        let mut batch = LlamaBatch::new(ctx.n_ctx() as usize, 1);
+
+        let tokens_list = ctx.model.str_to_token(&request.text, AddBos::Always)?;
+
+        batch
+            .add_sequence(&tokens_list, 0, false)
+            .expect("Failed to add sequence");
+
+        ctx.clear_kv_cache();
+
+        ctx.decode(&mut batch)?;
+
+        let embedding = ctx.embeddings_seq_ith(0).unwrap().to_vec();
+        println!("got embedding: {:?}", embedding);
+
+        request
+            .respond_to
+            .send(embedding)
+            .map_err(|_| WorkerError::SendError)?;
+    }
+    Ok(())
+}
+
+fn dotproduct(a: &[f32], b: &[f32]) -> f32 {
+    assert!(a.len() == b.len());
+    a.iter().zip(b.iter()).map(|(x, y)| x * y).sum()
+}
+
+fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
+    let norm_a = dotproduct(a, a).sqrt();
+    let norm_b = dotproduct(b, b).sqrt();
+    if norm_a == 0. || norm_b == 0. {
+        return f32::NAN;
+    }
+    dotproduct(a, b) / (norm_a * norm_b)
+}
+
 macro_rules! test_model_path {
     () => {
         std::env::var("TEST_MODEL")
             .unwrap_or("model.gguf".to_string())
+            .as_str()
+    };
+}
+
+macro_rules! test_embeddings_model_path {
+    () => {
+        std::env::var("TEST_EMBEDDINGS_MODEL")
+            .unwrap_or("embeddings.gguf".to_string())
             .as_str()
     };
 }
@@ -291,7 +369,7 @@ mod tests {
         let (completion_tx, completion_rx) = std::sync::mpsc::channel();
 
         std::thread::spawn(move || {
-            run_worker(
+            run_completion_worker(
                 model,
                 prompt_rx,
                 completion_tx,
@@ -330,7 +408,7 @@ mod tests {
         let (completion_tx, completion_rx) = std::sync::mpsc::channel();
 
         std::thread::spawn(|| {
-            run_worker(
+            run_completion_worker(
                 model,
                 prompt_rx,
                 completion_tx,
@@ -405,5 +483,64 @@ mod tests {
         let model = get_model(test_model_path!()).expect("Failed loading model");
         let sampler = make_sampler(&model, DEFAULT_SAMPLER_CONFIG);
         assert!(sampler.is_ok(), "make_sampler returned an Err");
+    }
+
+    #[test]
+    fn test_embeddings() {
+        let model = get_model(test_embeddings_model_path!()).unwrap();
+
+        let (prompt_tx, prompt_rx) = std::sync::mpsc::channel();
+        let (embedding_tx, embedding_rx) = std::sync::mpsc::channel();
+
+        std::thread::spawn(|| run_embedding_worker(model, prompt_rx, embedding_tx));
+
+        prompt_tx
+            .send("Copenhagen is the capital of Denmark.".to_string())
+            .unwrap();
+        let copenhagen_embedding = match embedding_rx.recv() {
+            Ok(EmbeddingsOutput::Embedding(vec)) => vec,
+            _ => panic!(),
+        };
+
+        prompt_tx
+            .send("Berlin is the capital of Germany.".to_string())
+            .unwrap();
+        let berlin_embedding = match embedding_rx.recv() {
+            Ok(EmbeddingsOutput::Embedding(vec)) => vec,
+            _ => panic!(),
+        };
+
+        prompt_tx
+            .send("Your mother was a hamster and your father smelt of elderberries!".to_string())
+            .unwrap();
+        let insult_embedding = match embedding_rx.recv() {
+            Ok(EmbeddingsOutput::Embedding(vec)) => vec,
+            _ => panic!(),
+        };
+
+        assert!(
+            insult_embedding.len() == berlin_embedding.len()
+                && berlin_embedding.len() == copenhagen_embedding.len()
+                && copenhagen_embedding.len() == insult_embedding.len(),
+            "not all embedding lengths were equal"
+        );
+
+        // cosine similarity should not care about order
+        assert_eq!(
+            cosine_similarity(&copenhagen_embedding, &berlin_embedding),
+            cosine_similarity(&berlin_embedding, &copenhagen_embedding)
+        );
+
+        // any vector should have cosine similarity 1 to itself
+        assert_eq!(
+            cosine_similarity(&copenhagen_embedding, &copenhagen_embedding),
+            1.0
+        );
+
+        // the insult should have a lower similarity than the two geography sentences
+        assert!(
+            cosine_similarity(&copenhagen_embedding, &insult_embedding)
+                < cosine_similarity(&copenhagen_embedding, &berlin_embedding)
+        );
     }
 }
