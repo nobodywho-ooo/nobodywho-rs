@@ -1,7 +1,6 @@
 extends NobodyWhoPromptChat
 
 func _ready() -> void:
-	run()
 	say("Hi there! Who are you?")
 
 func _on_completion_updated(text) -> void:
