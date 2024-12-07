@@ -43,7 +43,10 @@ pub enum LoadModelError {
     InvalidModel(String),
 }
 
-pub fn get_model(model_path: &str) -> Result<Arc<LlamaModel>, LoadModelError> {
+pub fn get_model(
+    model_path: &str,
+    use_gpu_if_available: bool,
+) -> Result<Arc<LlamaModel>, LoadModelError> {
     // HACK: only offload anything to the gpu if we can find a dedicated GPU
     //       there seems to be a bug which results in garbage tokens if we over-allocate an integrated GPU
     //       while using the vulkan backend. See: https://github.com/nobodywho-ooo/nobodywho-rs/pull/14
@@ -52,7 +55,7 @@ pub fn get_model(model_path: &str) -> Result<Arc<LlamaModel>, LoadModelError> {
     }
 
     let model_params = LlamaModelParams::default().with_n_gpu_layers(
-        if has_discrete_gpu() || cfg!(target_os = "macos") {
+        if use_gpu_if_available && (has_discrete_gpu() || cfg!(target_os = "macos")) {
             1000000
         } else {
             0
@@ -285,7 +288,7 @@ mod tests {
 
     #[test]
     fn test_completion() {
-        let model = get_model(test_model_path!()).unwrap();
+        let model = get_model(test_model_path!(), true).unwrap();
 
         let (prompt_tx, prompt_rx) = std::sync::mpsc::channel();
         let (completion_tx, completion_rx) = std::sync::mpsc::channel();
@@ -323,7 +326,7 @@ mod tests {
 
     #[test]
     fn test_chat_completion() {
-        let model = get_model(test_model_path!()).unwrap();
+        let model = get_model(test_model_path!(), true).unwrap();
         let model_copy = model.clone();
 
         let (prompt_tx, prompt_rx) = std::sync::mpsc::channel();
@@ -402,7 +405,7 @@ mod tests {
 
     #[test]
     fn test_initialize_default_sampler() {
-        let model = get_model(test_model_path!()).expect("Failed loading model");
+        let model = get_model(test_model_path!(), true).expect("Failed loading model");
         let sampler = make_sampler(&model, DEFAULT_SAMPLER_CONFIG);
         assert!(sampler.is_ok(), "make_sampler returned an Err");
     }
