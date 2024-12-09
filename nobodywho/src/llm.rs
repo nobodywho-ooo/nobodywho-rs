@@ -183,6 +183,7 @@ fn run_worker_result(
     sampler_config: SamplerConfig,
     n_ctx: u32,
 ) -> Result<(), WorkerError> {
+    // according to llama.cpp source code, the longest known template is about 1200bytes
     let chat_template = model.get_chat_template(4_000)?;
     let mut chat_state = chat_state::ChatState::new(chat_template);
 
