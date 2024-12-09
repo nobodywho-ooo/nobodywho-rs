@@ -142,7 +142,7 @@ struct NobodyWhoPromptChat {
     #[export]
     context_length: u32,
 
-    prompt_tx: Option<Sender<(String, String)>>,
+    prompt_tx: Option<Sender<String>>,
     completion_rx: Option<Receiver<llm::LLMOutput>>,
 
     base: Base<Node>,
