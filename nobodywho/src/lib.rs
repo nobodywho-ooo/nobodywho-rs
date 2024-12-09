@@ -192,12 +192,12 @@ impl INode for NobodyWhoPromptChat {
 
 #[godot_api]
 impl NobodyWhoPromptChat {
-    fn get_model(&mut self) -> Option<llm::Model> {
-        let gd_model_node = self.model_node.as_mut()?;
+    fn get_model(&mut self) -> Result<llm::Model, String> {
+        let gd_model_node = self.model_node.as_mut().ok_or("Model node was not set")?;
         let mut nobody_model = gd_model_node.bind_mut();
-        let model: llm::Model = nobody_model.get_model().ok()?;
+        let model: llm::Model = nobody_model.get_model().map_err(|e| e.to_string())?;
 
-        Some(model)
+        Ok(model)
     }
 
     fn get_sampler_config(&mut self) -> SamplerConfig {
@@ -212,7 +212,7 @@ impl NobodyWhoPromptChat {
     #[func]
     fn start_worker(&mut self) {
         let mut result = || -> Result<(), String> {
-            let model = self.get_model().ok_or("Model not loaded")?;
+            let model = self.get_model()?;
             let sampler_config = self.get_sampler_config();
 
             // make and store channels for communicating with the llm worker thread
