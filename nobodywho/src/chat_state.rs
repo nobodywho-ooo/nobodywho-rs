@@ -3,7 +3,13 @@ use std::sync::LazyLock;
 use minijinja::{context, Environment};
 use serde::{self, Serialize};
 
-static MINIJINJA_ENV: LazyLock<Environment> = LazyLock::new(|| Environment::new());
+static MINIJINJA_ENV: LazyLock<Environment> = LazyLock::new(|| {
+    let mut env = Environment::new();
+    env.add_function("raise_exception", |msg: String| -> Result<(), minijinja::Error> {
+        Err(minijinja::Error::new(minijinja::ErrorKind::InvalidOperation, msg))
+    });
+    env
+});
 
 #[derive(Serialize)]
 pub struct Message {
