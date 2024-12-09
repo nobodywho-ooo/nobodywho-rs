@@ -137,7 +137,7 @@ struct NobodyWhoChat {
 
     #[export]
     #[var(hint = MULTILINE_TEXT)]
-    prompt: GString,
+    system_prompt: GString,
 
     #[export]
     context_length: u32,
@@ -154,7 +154,7 @@ impl INode for NobodyWhoChat {
         Self {
             model_node: None,
             sampler: None,
-            prompt: "".into(),
+            system_prompt: "".into(),
             context_length: 4096,
             prompt_tx: None,
             completion_rx: None,
@@ -223,7 +223,7 @@ impl NobodyWhoChat {
 
             // start the llm worker
             let n_ctx = self.context_length;
-            let system_prompt = self.prompt.to_string();
+            let system_prompt = self.system_prompt.to_string();
             std::thread::spawn(move || {
                 run_worker(
                     model,
