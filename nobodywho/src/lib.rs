@@ -128,7 +128,7 @@ impl NobodyWhoModel {
 
 #[derive(GodotClass)]
 #[class(base=Node)]
-struct NobodyWhoPromptChat {
+struct NobodyWhoChat {
     #[export]
     model_node: Option<Gd<NobodyWhoModel>>,
 
@@ -149,7 +149,7 @@ struct NobodyWhoPromptChat {
 }
 
 #[godot_api]
-impl INode for NobodyWhoPromptChat {
+impl INode for NobodyWhoChat {
     fn init(base: Base<Node>) -> Self {
         Self {
             model_node: None,
@@ -167,11 +167,11 @@ impl INode for NobodyWhoPromptChat {
             match rx.try_recv() {
                 Ok(llm::LLMOutput::Token(token)) => {
                     self.base_mut()
-                        .emit_signal("completion_updated", &[Variant::from(token)]);
+                        .emit_signal("response_updated", &[Variant::from(token)]);
                 }
                 Ok(llm::LLMOutput::Done(response)) => {
                     self.base_mut()
-                        .emit_signal("completion_finished", &[Variant::from(response)]);
+                        .emit_signal("response_finished", &[Variant::from(response)]);
                 }
                 Ok(llm::LLMOutput::FatalErr(msg)) => {
                     godot_error!("Model worker crashed: {msg}");
@@ -191,7 +191,7 @@ impl INode for NobodyWhoPromptChat {
 }
 
 #[godot_api]
-impl NobodyWhoPromptChat {
+impl NobodyWhoChat {
     fn get_model(&mut self) -> Result<llm::Model, String> {
         let gd_model_node = self.model_node.as_mut().ok_or("Model node was not set")?;
         let mut nobody_model = gd_model_node.bind_mut();
@@ -260,8 +260,8 @@ impl NobodyWhoPromptChat {
     }
 
     #[signal]
-    fn completion_updated();
+    fn response_updated(new_token: String);
 
     #[signal]
-    fn completion_finished();
+    fn response_finished(response: String);
 }
