@@ -202,7 +202,7 @@ fn run_worker_result(
     while let Ok((role, content)) = message_rx.recv() {
         chat_state.add_message(&role, &content);
 
-        let diff = chat_state.render_chat()?;
+        let diff = chat_state.render_diff()?;
 
         let tokens_list = ctx.model.str_to_token(&diff, AddBos::Always)?;
 

@@ -5,9 +5,15 @@ use serde::{self, Serialize};
 
 static MINIJINJA_ENV: LazyLock<Environment> = LazyLock::new(|| {
     let mut env = Environment::new();
-    env.add_function("raise_exception", |msg: String| -> Result<(), minijinja::Error> {
-        Err(minijinja::Error::new(minijinja::ErrorKind::InvalidOperation, msg))
-    });
+    env.add_function(
+        "raise_exception",
+        |msg: String| -> Result<(), minijinja::Error> {
+            Err(minijinja::Error::new(
+                minijinja::ErrorKind::InvalidOperation,
+                msg,
+            ))
+        },
+    );
     env
 });
 
@@ -39,7 +45,7 @@ impl ChatState {
         });
     }
 
-    pub fn render_chat(&self) -> Result<String, minijinja::Error> {
+    pub fn render_diff(&mut self) -> Result<String, minijinja::Error> {
         let tmpl = MINIJINJA_ENV.template_from_str(&self.chat_template)?;
 
         let ctx = context! {
@@ -49,6 +55,10 @@ impl ChatState {
 
         let text = tmpl.render(ctx)?;
 
-        Ok(text)
+        let diff = text[self.length..].to_string();
+
+        self.length = text.len();
+
+        Ok(diff)
     }
 }
