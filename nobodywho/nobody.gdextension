@@ -1,0 +1,14 @@
+[configuration]
+entry_symbol = "gdext_rust_init"
+compatibility_minimum = 4.1
+reloadable = true
+
+[libraries]
+linux.debug.x86_64 =     "res://../nobody/target/debug/libnobody.so"
+linux.release.x86_64 =   "res://../nobody/target/release/libnobody.so"
+windows.debug.x86_64 =   "res://../nobody/target/debug/nobody.dll"
+windows.release.x86_64 = "res://../nobody/target/release/nobody.dll"
+macos.debug =            "res://../nobody/target/debug/libnobody.dylib"
+macos.release =          "res://../nobody/target/release/libnobody.dylib"
+macos.debug.arm64 =      "res://../nobody/target/debug/libnobody.dylib"
+macos.release.arm64 =    "res://../nobody/target/release/libnobody.dylib"

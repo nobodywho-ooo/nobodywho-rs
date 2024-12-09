@@ -5,12 +5,12 @@
 
 [sub_resource type="NobodyWhoSampler" id="NobodyWhoSampler_djbpq"]
 
-[node name="NobodyWhoPromptCompletion" type="Node2D"]
+[node name="World" type="Node2D"]
 
 [node name="NobodyWhoModel" type="NobodyWhoModel" parent="."]
 model_path = "res://model.gguf"
 
-[node name="NobodyWhoPromptChat" type="NobodyWhoPromptChat" parent="." node_paths=PackedStringArray("model_node")]
+[node name="NobodyWhoChat" type="NobodyWhoChat" parent="." node_paths=PackedStringArray("model_node")]
 model_node = NodePath("../NobodyWhoModel")
 sampler = SubResource("NobodyWhoSampler_djbpq")
 prompt = "You are a powerful wizard who always tries to cast spells to turn people into frogs.
@@ -21,5 +21,5 @@ script = ExtResource("2_r1dk7")
 [node name="NobodyWhoDB" type="NobodyWhoDB" parent="."]
 script = ExtResource("2_qeomc")
 
-[connection signal="completion_finished" from="NobodyWhoPromptChat" to="NobodyWhoPromptChat" method="_on_completion_finished"]
-[connection signal="completion_updated" from="NobodyWhoPromptChat" to="NobodyWhoPromptChat" method="_on_completion_updated"]
+[connection signal="response_finished" from="NobodyWhoChat" to="NobodyWhoChat" method="_on_response_finished"]
+[connection signal="response_updated" from="NobodyWhoChat" to="NobodyWhoChat" method="_on_response_updated"]
