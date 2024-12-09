@@ -170,7 +170,8 @@ impl INode for NobodyWhoPromptChat {
                         .emit_signal("completion_updated", &[Variant::from(token)]);
                 }
                 Ok(llm::LLMOutput::Done(response)) => {
-                    self.base_mut().emit_signal("completion_finished", &[Variant::from(response)]);
+                    self.base_mut()
+                        .emit_signal("completion_finished", &[Variant::from(response)]);
                 }
                 Ok(llm::LLMOutput::FatalErr(msg)) => {
                     godot_error!("Model worker crashed: {msg}");
@@ -191,12 +192,12 @@ impl INode for NobodyWhoPromptChat {
 
 #[godot_api]
 impl NobodyWhoPromptChat {
-    fn get_model(&mut self) -> Option<llm::Model> {
-        let gd_model_node = self.model_node.as_mut()?;
+    fn get_model(&mut self) -> Result<llm::Model, String> {
+        let gd_model_node = self.model_node.as_mut().ok_or("Model node was not set")?;
         let mut nobody_model = gd_model_node.bind_mut();
-        let model: llm::Model = nobody_model.get_model().ok()?;
+        let model: llm::Model = nobody_model.get_model().map_err(|e| e.to_string())?;
 
-        Some(model)
+        Ok(model)
     }
 
     fn get_sampler_config(&mut self) -> SamplerConfig {
@@ -209,9 +210,9 @@ impl NobodyWhoPromptChat {
     }
 
     #[func]
-    fn run(&mut self) {
+    fn start_worker(&mut self) {
         let mut result = || -> Result<(), String> {
-            let model = self.get_model().ok_or("Model not loaded")?;
+            let model = self.get_model()?;
             let sampler_config = self.get_sampler_config();
 
             // make and store channels for communicating with the llm worker thread
@@ -224,7 +225,14 @@ impl NobodyWhoPromptChat {
             let n_ctx = self.context_length;
             let system_prompt = self.prompt.to_string();
             std::thread::spawn(move || {
-                run_worker(model, prompt_rx, completion_tx, sampler_config, n_ctx, system_prompt);
+                run_worker(
+                    model,
+                    prompt_rx,
+                    completion_tx,
+                    sampler_config,
+                    n_ctx,
+                    system_prompt,
+                );
             });
 
             Ok(())
@@ -240,7 +248,9 @@ impl NobodyWhoPromptChat {
         if let Some(tx) = self.prompt_tx.as_ref() {
             tx.send(content).unwrap();
         } else {
-            godot_error!("Model not initialized. Call `run` first");
+            godot_warn!("Worker was not started yet, starting now... You may want to call `start_worker()` ahead of time to avoid waiting.");
+            self.start_worker();
+            self.send_message(content);
         }
     }
 
