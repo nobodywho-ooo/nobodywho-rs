@@ -74,9 +74,14 @@ impl ChatState {
             Ok(rendered) => Ok(rendered),
             Err(err) => match err.kind() {
                 minijinja::ErrorKind::InvalidOperation => {
-                    // concat the first two messages and try again
-                    self.messages = concat_system_and_first_user_messages(&self.messages);
-                    self.render()
+                    if err.to_string().contains("System role not supported") {
+                        // this is the error message we get when rendering the gemma2
+                        // concat the first two messages and try again
+                        self.messages = concat_system_and_first_user_messages(&self.messages);
+                        self.render()
+                    } else {
+                        Err(err)
+                    }
                 },
                 _ => Err(err)
             },
