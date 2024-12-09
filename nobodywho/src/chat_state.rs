@@ -33,18 +33,16 @@ impl ChatState {
         });
     }
 
-    pub fn render_chat(&self) -> String {
-        let tmpl = MINIJINJA_ENV
-            .template_from_str(&self.chat_template)
-            .unwrap();
+    pub fn render_chat(&self) -> Result<String, minijinja::Error> {
+        let tmpl = MINIJINJA_ENV.template_from_str(&self.chat_template)?;
 
         let ctx = context! {
             messages => &self.messages,
             add_generation_prompt => true,
         };
 
-        let text = tmpl.render(ctx).unwrap();
+        let text = tmpl.render(ctx)?;
 
-        text
+        Ok(text)
     }
 }

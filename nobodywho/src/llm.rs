@@ -148,6 +148,12 @@ pub enum WorkerError {
     #[error("Llama.cpp failed decoding: {0}")]
     DecodeError(#[from] llama_cpp_2::DecodeError),
 
+    #[error("Lama.cpp failed fetching chat template: {0}")]
+    ChatTemplateError(#[from] llama_cpp_2::ChatTemplateError),
+
+    #[error("Failed applying the jinja chat template: {0}")]
+    ApplyTemplateError(#[from] minijinja::Error),
+
     #[error("Context exceeded maximum length")]
     ContextLengthExceededError,
 
@@ -177,7 +183,7 @@ fn run_worker_result(
     sampler_config: SamplerConfig,
     n_ctx: u32,
 ) -> Result<(), WorkerError> {
-    let chat_template = model.get_chat_template(4_000).unwrap();
+    let chat_template = model.get_chat_template(4_000)?;
     let mut chat_state = chat_state::ChatState::new(chat_template);
 
     let n_threads = std::thread::available_parallelism()?.get() as i32;
@@ -196,7 +202,7 @@ fn run_worker_result(
     while let Ok((role, content)) = message_rx.recv() {
         chat_state.add_message(&role, &content);
 
-        let diff = chat_state.render_chat();
+        let diff = chat_state.render_chat()?;
 
         let tokens_list = ctx.model.str_to_token(&diff, AddBos::Always)?;
 
