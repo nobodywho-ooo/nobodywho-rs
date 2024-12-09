@@ -287,24 +287,22 @@ fn run_worker_result(
     unreachable!();
 }
 
-macro_rules! test_model_path {
-    () => {
-        std::env::var("TEST_MODEL")
-            .unwrap_or("model.gguf".to_string())
-            .as_str()
-    };
-}
-
 #[cfg(test)]
 mod tests {
-    use llama_cpp_2::model::LlamaChatMessage;
-
     use super::*;
+
+    macro_rules! test_model_path {
+        () => {
+            std::env::var("TEST_MODEL")
+                .unwrap_or("model.gguf".to_string())
+                .as_str()
+        };
+    }
+
 
     #[test]
     fn test_chat_completion() {
         let model = get_model(test_model_path!(), true).unwrap();
-        let model_copy = model.clone();
 
         let (prompt_tx, prompt_rx) = std::sync::mpsc::channel();
         let (completion_tx, completion_rx) = std::sync::mpsc::channel();
@@ -314,7 +312,7 @@ mod tests {
 
         prompt_tx.send("What is the capital of Denmark?".to_string()).unwrap();
 
-        let mut result: String = "".to_string();
+        let result: String;
         loop {
             match completion_rx.recv() {
                 Ok(LLMOutput::Token(_)) => {},
@@ -325,9 +323,13 @@ mod tests {
                 _ => unreachable!(),
             }
         }
+        assert!(
+            result.contains("Copenhagen"),
+            "Expected completion to contain 'Copenhagen', got: {result}"
+        );
 
         prompt_tx.send("What language to they speak there?".to_string()).unwrap();
-        let mut result: String = "".to_string();
+        let result: String;
         loop {
             match completion_rx.recv() {
                 Ok(LLMOutput::Token(_)) => {},
