@@ -32,18 +32,25 @@ pub struct ChatState {
 /// given a chat history where the first two messages are from system and user
 /// return a history where the first message is from user, and contains the system prompt as well.
 /// (this is what llama.cpp does for the gemma template too)
-fn concat_system_and_first_user_messages(messages: &Vec<Message>) -> Vec<Message> {
-    assert!(messages.len() >= 2);
-    assert!(messages[0].role == "system");
-    assert!(messages[1].role == "user");
+fn concat_system_and_first_user_messages(messages: &Vec<Message>) -> Result<Vec<Message>, minijinja::Error> {
+    if messages.len() < 2 || messages[0].role != "system" || messages[1].role != "user" {
+        // HACK: this should probably be a custom ChatStateError, and nont a minijinja error
+        //       but this was quick and easy rn, and we "abuse" the minijinja errors for
+        //       `raise_exception` anyway...
+        return Err(minijinja::Error::new(
+            minijinja::ErrorKind::InvalidOperation,
+            "Cannot replace system prompt unless the first two messages are from system and user roles."
+        ))
+    }
     let new_first_message = Message {
         role: "user".to_string(),
         content: format!("{}\n\n{}", messages[0].content, messages[1].content)
     };
-    vec![new_first_message]
+    let new_messages = vec![new_first_message]
         .into_iter()
         .chain(messages[2..].iter().cloned())
-        .collect()
+        .collect();
+    Ok(new_messages)
 }
 
 impl ChatState {
@@ -74,7 +81,7 @@ impl ChatState {
                     if err.to_string().contains("System role not supported") {
                         // this is the error message we get when rendering the gemma2
                         // concat the first two messages and try again
-                        self.messages = concat_system_and_first_user_messages(&self.messages);
+                        self.messages = concat_system_and_first_user_messages(&self.messages)?;
                         self.render()
                     } else {
                         Err(err)
