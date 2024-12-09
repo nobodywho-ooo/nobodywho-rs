@@ -252,6 +252,7 @@ fn run_worker_result(
                         .send(LLMOutput::Done(response))
                         .map_err(|_| WorkerError::SendError)?;
 
+                    response.clear();
                     break;
                 }
 
