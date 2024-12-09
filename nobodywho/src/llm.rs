@@ -188,7 +188,7 @@ fn run_worker_result(
     // according to llama.cpp source code, the longest known template is about 1200bytes
     let chat_template = model.get_chat_template(4_000)?;
     let mut chat_state = chat_state::ChatState::new(chat_template);
-    chat_state.add_message("system", &system_prompt);
+    chat_state.add_message("system".to_string(), &system_prompt);
 
     let n_threads = std::thread::available_parallelism()?.get() as i32;
     let n_ctx: u32 = std::cmp::min(n_ctx, model.n_ctx_train());
@@ -204,7 +204,7 @@ fn run_worker_result(
     let mut sampler = make_sampler(&model, sampler_config)?;
 
     while let Ok(content) = message_rx.recv() {
-        chat_state.add_message("user", &content);
+        chat_state.add_message("user".to_string(), &content);
 
         let diff = chat_state.render_diff()?;
 
@@ -246,11 +246,12 @@ fn run_worker_result(
                     batch.clear();
                     batch.add(new_token_id, n_cur, &[0], true)?;
 
-                    chat_state.add_message("assistant", &response);
+                    chat_state.add_message("assistant".to_string(), response.clone());
 
                     completion_tx
                         .send(LLMOutput::Done(response))
                         .map_err(|_| WorkerError::SendError)?;
+
                     break;
                 }
 

@@ -55,11 +55,8 @@ impl ChatState {
         }
     }
 
-    pub fn add_message(&mut self, role: &str, content: &str) {
-        self.messages.push(Message {
-            role: role.to_string(),
-            content: content.to_string(),
-        });
+    pub fn add_message(&mut self, role: String, content: String) {
+        self.messages.push(Message { role, content });
     }
 
     fn render(&mut self) -> Result<String, minijinja::Error> {
