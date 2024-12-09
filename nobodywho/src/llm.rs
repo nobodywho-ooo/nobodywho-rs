@@ -19,7 +19,7 @@ static LLAMA_BACKEND: LazyLock<LlamaBackend> =
 pub enum LLMOutput {
     Token(String),
     FatalErr(WorkerError),
-    Done,
+    Done(String),
 }
 
 pub type Model = Arc<LlamaModel>;
@@ -245,7 +245,7 @@ fn run_worker_result(
                     chat_state.add_message("assistant", &response);
 
                     completion_tx
-                        .send(LLMOutput::Done)
+                        .send(LLMOutput::Done(response))
                         .map_err(|_| WorkerError::SendError)?;
                     break;
                 }

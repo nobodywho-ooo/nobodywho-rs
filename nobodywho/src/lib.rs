@@ -170,8 +170,8 @@ impl INode for NobodyWhoPromptChat {
                         self.base_mut()
                             .emit_signal("completion_updated", &[Variant::from(token)]);
                     }
-                    Ok(llm::LLMOutput::Done) => {
-                        self.base_mut().emit_signal("completion_finished", &[]);
+                    Ok(llm::LLMOutput::Done(response)) => {
+                        self.base_mut().emit_signal("completion_finished", &[Variant::from(response)]);
                     }
                     Ok(llm::LLMOutput::FatalErr(msg)) => {
                         godot_error!("Model worker crashed: {msg}");
