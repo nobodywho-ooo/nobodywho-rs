@@ -226,12 +226,10 @@ impl NobodyWhoPromptChat {
 
             // start the llm worker
             let n_ctx = self.context_length;
+            let system_prompt = self.prompt.to_string();
             std::thread::spawn(move || {
-                run_worker(model, prompt_rx, completion_tx, sampler_config, n_ctx);
+                run_worker(model, prompt_rx, completion_tx, sampler_config, n_ctx, system_prompt);
             });
-
-            // Send the system prompt to the worker
-            self.send_message("system".into(), self.prompt.to_string());
 
             Ok(())
         };

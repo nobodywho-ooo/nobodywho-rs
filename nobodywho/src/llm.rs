@@ -167,9 +167,10 @@ pub fn run_worker(
     completion_tx: Sender<LLMOutput>,
     sampler_config: SamplerConfig,
     n_ctx: u32,
+    system_prompt: String
 ) {
     // this function is a pretty thin wrapper to send back an `Err` if we get it
-    if let Err(msg) = run_worker_result(model, message_rx, &completion_tx, sampler_config, n_ctx) {
+    if let Err(msg) = run_worker_result(model, message_rx, &completion_tx, sampler_config, n_ctx, system_prompt) {
         completion_tx
             .send(LLMOutput::FatalErr(msg))
             .expect("Could not send llm worker fatal error back to consumer.");
@@ -182,10 +183,12 @@ fn run_worker_result(
     completion_tx: &Sender<LLMOutput>,
     sampler_config: SamplerConfig,
     n_ctx: u32,
+    system_prompt: String,
 ) -> Result<(), WorkerError> {
     // according to llama.cpp source code, the longest known template is about 1200bytes
     let chat_template = model.get_chat_template(4_000)?;
     let mut chat_state = chat_state::ChatState::new(chat_template);
+    chat_state.add_message("system", &system_prompt);
 
     let n_threads = std::thread::available_parallelism()?.get() as i32;
     let n_ctx: u32 = std::cmp::min(n_ctx, model.n_ctx_train());
@@ -204,6 +207,7 @@ fn run_worker_result(
         chat_state.add_message(&role, &content);
 
         let diff = chat_state.render_diff()?;
+        println!("DIFF:{}", diff);
 
         let tokens_list = ctx.model.str_to_token(&diff, AddBos::Always)?;
 
