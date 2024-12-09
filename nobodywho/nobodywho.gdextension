@@ -16,4 +16,3 @@ macos.release.arm64 =    "res://addons/nobodywho/nobodywho-aarch64-apple-darwin-
 [icons]
 NobodyWhoModel =            "res://addons/nobodywho/icon.svg"
 NobodyWhoPromptChat =       "res://addons/nobodywho/icon.svg"
-NobodyWhoPromptCompletion = "res://addons/nobodywho/icon.svg"
