@@ -240,9 +240,9 @@ impl NobodyWhoPromptChat {
         }
     }
 
-    fn send_message(&mut self, role: String, content: String) {
+    fn send_message(&mut self, content: String) {
         if let Some(tx) = self.prompt_tx.as_ref() {
-            tx.send((role, content)).unwrap();
+            tx.send(content).unwrap();
         } else {
             godot_error!("Model not initialized. Call `run` first");
         }
@@ -250,7 +250,7 @@ impl NobodyWhoPromptChat {
 
     #[func]
     fn say(&mut self, message: String) {
-        self.send_message("user".into(), message);
+        self.send_message(message);
     }
 
     #[signal]

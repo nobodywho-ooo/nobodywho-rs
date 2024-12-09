@@ -163,7 +163,7 @@ pub enum WorkerError {
 
 pub fn run_worker(
     model: Arc<LlamaModel>,
-    message_rx: Receiver<(String, String)>,
+    message_rx: Receiver<String>,
     completion_tx: Sender<LLMOutput>,
     sampler_config: SamplerConfig,
     n_ctx: u32,
@@ -179,7 +179,7 @@ pub fn run_worker(
 
 fn run_worker_result(
     model: Arc<LlamaModel>,
-    message_rx: Receiver<(String, String)>,
+    message_rx: Receiver<String>,
     completion_tx: &Sender<LLMOutput>,
     sampler_config: SamplerConfig,
     n_ctx: u32,
@@ -203,11 +203,10 @@ fn run_worker_result(
 
     let mut sampler = make_sampler(&model, sampler_config)?;
 
-    while let Ok((role, content)) = message_rx.recv() {
-        chat_state.add_message(&role, &content);
+    while let Ok(content) = message_rx.recv() {
+        chat_state.add_message("user", &content);
 
         let diff = chat_state.render_diff()?;
-        println!("DIFF:{}", diff);
 
         let tokens_list = ctx.model.str_to_token(&diff, AddBos::Always)?;
 
@@ -301,44 +300,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_completion() {
-        let model = get_model(test_model_path!(), true).unwrap();
-
-        let (prompt_tx, prompt_rx) = std::sync::mpsc::channel();
-        let (completion_tx, completion_rx) = std::sync::mpsc::channel();
-
-        std::thread::spawn(move || {
-            run_worker(
-                model,
-                prompt_rx,
-                completion_tx,
-                DEFAULT_SAMPLER_CONFIG,
-                4096,
-            )
-        });
-
-        prompt_tx.send("Count to five: 1, 2, ".to_string()).unwrap();
-
-        let mut result: String = "".to_string();
-
-        for _ in 0..10 {
-            match completion_rx.recv() {
-                Ok(LLMOutput::Token(token)) => {
-                    result += token.as_str();
-                }
-                Ok(LLMOutput::Done) => {
-                    break;
-                }
-                _ => unreachable!(),
-            }
-        }
-        let expected = "3, 4, 5";
-        assert_eq!(&result[..expected.len()], expected);
-
-        // Kill worker
-    }
-
-    #[test]
     fn test_chat_completion() {
         let model = get_model(test_model_path!(), true).unwrap();
         let model_copy = model.clone();
@@ -346,65 +307,30 @@ mod tests {
         let (prompt_tx, prompt_rx) = std::sync::mpsc::channel();
         let (completion_tx, completion_rx) = std::sync::mpsc::channel();
 
-        std::thread::spawn(|| {
-            run_worker(
-                model,
-                prompt_rx,
-                completion_tx,
-                DEFAULT_SAMPLER_CONFIG,
-                4096,
-            )
-        });
+        let system_prompt = "You are a helpful assistant. The user asks you a question, and you provide an answer. You take multiple turns to provide the answer. Be consice and only provide the answer".to_string();
+        std::thread::spawn(|| run_worker(model, prompt_rx, completion_tx, DEFAULT_SAMPLER_CONFIG, 4096, system_prompt));
 
-        let chat: Vec<LlamaChatMessage> = vec![
-            LlamaChatMessage::new(
-                "system".to_string(),
-                "You are a helpful assistant. The user asks you a question, and you provide an answer. You take multiple turns to provide the answer. Be consice and only provide the answer".to_string(),
-            )
-            .unwrap(),
-            LlamaChatMessage::new(
-                "user".to_string(),
-                "What is the capital of Denmark?".to_string(),
-            )
-            .unwrap(),
-        ];
-
-        let prompt = model_copy.apply_chat_template(None, chat, true).unwrap();
-
-        prompt_tx.send(prompt).unwrap();
+        prompt_tx.send("What is the capital of Denmark?".to_string()).unwrap();
 
         let mut result: String = "".to_string();
-
         loop {
             match completion_rx.recv() {
-                Ok(LLMOutput::Token(token)) => {
-                    result += token.as_str();
-                }
-                Ok(LLMOutput::Done) => {
+                Ok(LLMOutput::Token(_)) => {},
+                Ok(LLMOutput::Done(response)) => {
+                    result = response;
                     break;
                 }
                 _ => unreachable!(),
             }
         }
 
-        let chat: Vec<LlamaChatMessage> = vec![LlamaChatMessage::new(
-            "user".to_string(),
-            "What language to they speak there?".to_string(),
-        )
-        .unwrap()];
-
-        let prompt = model_copy.apply_chat_template(None, chat, true).unwrap();
-
-        prompt_tx.send(prompt).unwrap();
-
+        prompt_tx.send("What language to they speak there?".to_string()).unwrap();
         let mut result: String = "".to_string();
-
         loop {
             match completion_rx.recv() {
-                Ok(LLMOutput::Token(token)) => {
-                    result += token.as_str();
-                }
-                Ok(LLMOutput::Done) => {
+                Ok(LLMOutput::Token(_)) => {},
+                Ok(LLMOutput::Done(response)) => {
+                    result = response;
                     break;
                 }
                 _ => unreachable!(),
