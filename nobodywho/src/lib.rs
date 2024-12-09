@@ -163,31 +163,27 @@ impl INode for NobodyWhoPromptChat {
     }
 
     fn physics_process(&mut self, _delta: f64) {
-        loop {
-            if let Some(rx) = self.completion_rx.as_ref() {
-                match rx.try_recv() {
-                    Ok(llm::LLMOutput::Token(token)) => {
-                        self.base_mut()
-                            .emit_signal("completion_updated", &[Variant::from(token)]);
-                    }
-                    Ok(llm::LLMOutput::Done(response)) => {
-                        self.base_mut().emit_signal("completion_finished", &[Variant::from(response)]);
-                    }
-                    Ok(llm::LLMOutput::FatalErr(msg)) => {
-                        godot_error!("Model worker crashed: {msg}");
-                    }
-                    Err(std::sync::mpsc::TryRecvError::Empty) => {
-                        break;
-                    }
-                    Err(std::sync::mpsc::TryRecvError::Disconnected) => {
-                        godot_error!("Model output channel died. Did the LLM worker crash?");
-                        // set hanging channel to None
-                        // this prevents repeating the dead channel error message foreve
-                        self.completion_rx = None;
-                    }
+        while let Some(rx) = self.completion_rx.as_ref() {
+            match rx.try_recv() {
+                Ok(llm::LLMOutput::Token(token)) => {
+                    self.base_mut()
+                        .emit_signal("completion_updated", &[Variant::from(token)]);
                 }
-            } else {
-                break;
+                Ok(llm::LLMOutput::Done(response)) => {
+                    self.base_mut().emit_signal("completion_finished", &[Variant::from(response)]);
+                }
+                Ok(llm::LLMOutput::FatalErr(msg)) => {
+                    godot_error!("Model worker crashed: {msg}");
+                }
+                Err(std::sync::mpsc::TryRecvError::Empty) => {
+                    break;
+                }
+                Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                    godot_error!("Model output channel died. Did the LLM worker crash?");
+                    // set hanging channel to None
+                    // this prevents repeating the dead channel error message foreve
+                    self.completion_rx = None;
+                }
             }
         }
     }

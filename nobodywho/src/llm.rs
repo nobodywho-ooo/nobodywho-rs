@@ -66,8 +66,8 @@ pub fn get_model(
         LlamaModel::load_from_file(&LLAMA_BACKEND, model_path, &model_params).map_err(|e| {
             LoadModelError::InvalidModel(format!(
                 "Bad model path: {} - Llama.cpp error: {}",
-                model_path.to_string(),
-                e.to_string()
+                model_path,
+                e
             ))
         })?;
     Ok(Arc::new(model))

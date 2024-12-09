@@ -32,7 +32,7 @@ pub struct ChatState {
 /// given a chat history where the first two messages are from system and user
 /// return a history where the first message is from user, and contains the system prompt as well.
 /// (this is what llama.cpp does for the gemma template too)
-fn concat_system_and_first_user_messages(messages: &Vec<Message>) -> Result<Vec<Message>, minijinja::Error> {
+fn concat_system_and_first_user_messages(messages: &[Message]) -> Result<Vec<Message>, minijinja::Error> {
     if messages.len() < 2 || messages[0].role != "system" || messages[1].role != "user" {
         // HACK: this should probably be a custom ChatStateError, and nont a minijinja error
         //       but this was quick and easy rn, and we "abuse" the minijinja errors for
