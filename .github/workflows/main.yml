@@ -179,6 +179,9 @@ jobs:
       - name: "Download test model"
         run: wget "https://huggingface.co/bartowski/gemma-2-2b-it-GGUF/resolve/main/gemma-2-2b-it-Q5_K_M.gguf" -O ./nobodywho/model.gguf
 
+      - name: "Download embeddings model"
+        run: wget "https://huggingface.co/CompendiumLabs/bge-small-en-v1.5-gguf/resolve/main/bge-small-en-v1.5-q8_0.gguf" -O ./nobodywho/embeddings.gguf
+
       - name: "Run unit tests"
         run: cargo test -- --nocapture --test-threads=1
         working-directory: ./nobodywho
