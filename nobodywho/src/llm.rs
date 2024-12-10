@@ -447,7 +447,7 @@ mod tests {
 
     #[test]
     fn test_embeddings() {
-        let model = get_model(test_embeddings_model_path!()).unwrap();
+        let model = get_model(test_embeddings_model_path!(), true).unwrap();
 
         let (prompt_tx, prompt_rx) = std::sync::mpsc::channel();
         let (embedding_tx, embedding_rx) = std::sync::mpsc::channel();
