@@ -28,7 +28,7 @@ Also in the inspector, you can provide a prompt, which gives the LLM instruction
 Now you can add a script to the `NobodyWhoChat` node, to provide your chat interaction.
 
 `NobodyWhoChat` uses this programming interface:
-    - `say(text)`: a function that can be used to send text from the user to the LLM.
+    - `say(text: String)`: a function that can be used to send text from the user to the LLM.
     - `response_updated(token: String)`: a signal that is emitted every time the LLM produces more text. Contains roughly one word per invocation.
     - `response_finished(response: String)`: a signal which indicates that the LLM is done speaking.
     - `start_worker()`: a function that starts the LLM worker. The LLM needs a few seconds to get ready before chatting, so you may want to call this ahead of time.
