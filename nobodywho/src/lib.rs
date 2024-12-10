@@ -417,6 +417,8 @@ impl NobodyWhoEmbedding {
     fn embed(&mut self, text: String) -> Signal {
         // returns signal, so that you can `var vec = await embed("Hello, world!")`
         let (embedding_tx, embedding_rx) = std::sync::mpsc::channel();
+
+        // send SEND SENd
         if let Some(tx) = &self.request_tx {
             tx.send(llm::EmbeddingsRequest {
                 text,
@@ -426,14 +428,15 @@ impl NobodyWhoEmbedding {
         } else {
             godot_warn!("Worker was not started yet, starting now... You may want to call `start_worker()` ahead of time to avoid waiting.");
             self.start_worker();
-            self.embed(text);
+            return self.embed(text);
         }
-        let mut response_node: Gd<NobodyWhoEmbeddingResponse> =
-            NobodyWhoEmbeddingResponse::new_gd();
-        response_node.bind_mut().set_embedding_rx(embedding_rx);
+
+        // make object to contain response signal
+        let mut response_obj: Gd<NobodyWhoEmbeddingResponse> = NobodyWhoEmbeddingResponse::new_gd();
+        response_obj.bind_mut().set_embedding_rx(embedding_rx);
         let signal =
-            godot::builtin::Signal::from_object_signal(&response_node, "embedding_finished");
-        self.responses.push(response_node);
+            godot::builtin::Signal::from_object_signal(&response_obj, "embedding_finished");
+        self.responses.push(response_obj);
         return signal;
     }
 }
