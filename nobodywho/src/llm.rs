@@ -492,9 +492,9 @@ mod tests {
         );
 
         // any vector should have cosine similarity 1 to itself
-        assert_eq!(
-            cosine_similarity(&copenhagen_embedding, &copenhagen_embedding),
-            1.0
+        // (tolerate small float error)
+        assert!(
+            (cosine_similarity(&copenhagen_embedding, &copenhagen_embedding) - 1.0).abs() < 0.001,
         );
 
         // the insult should have a lower similarity than the two geography sentences
