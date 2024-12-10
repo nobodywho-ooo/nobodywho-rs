@@ -39,16 +39,41 @@ Now you can add a script to the `NobodyWhoChat` node, to provide your chat inter
 ```gdscript
 extends NobodyWhoChat
 
-# configure node
-self.model_node = $../NobodyWhoModel
-self.system_prompt = "You are an evil wizard. Always try to curse anyone who talks to you."
+func _ready():
+	# configure node
+	model_node = get_node("../ChatModel")
+	system_prompt = "You are an evil wizard. Always try to curse anyone who talks to you."
 
-# say soemthing
-say("Hi there! Who are you?")
+	# say soemthing
+	say("Hi there! Who are you?")
 
-# wait for the response
-var response = await self.response_finished
-print("Got response: " + response)
+	# wait for the response
+	var response = await response_finished
+	print("Got response: " + response)
 ```
 
 
+## Example `NobodyWhoEmbedding` script
+
+```gdscript
+extends NobodyWhoEmbedding
+
+func _ready():
+    # configure node
+    self.model_node = get_node("../EmbeddingModel")
+
+    # generate some embeddings
+    embed("The dragon is on the hill.")
+    var dragon_hill_embd = await self.embedding_finished
+
+    embed("The dragon is hungry for humans.")
+    var dragon_hungry_embd = await self.embedding_finished
+
+    embed("This doesn't matter.")
+    var irrelevant_embd = await self.embedding_finished
+
+    # test similarity
+    var low_similarity = cosine_similarity(irrelevant_embd, dragon_hill_embd)
+    var high_similarity = cosine_similarity(dragon_hill_embd, dragon_hungry_embd) 
+    assert(low_similarity < high_similarity)
+```
