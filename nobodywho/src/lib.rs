@@ -324,7 +324,6 @@ impl NobodyWhoEmbedding {
     fn embedding_finished(embedding: PackedFloat32Array);
 
     fn get_model(&mut self) -> Result<llm::Model, String> {
-        // TODO: this is copied from NobodyWhoChat
         let gd_model_node = self.model_node.as_mut().ok_or("Model node was not set")?;
         let mut nobody_model = gd_model_node.bind_mut();
         let model: llm::Model = nobody_model.get_model().map_err(|e| e.to_string())?;
@@ -334,7 +333,6 @@ impl NobodyWhoEmbedding {
 
     #[func]
     fn start_worker(&mut self) {
-        // TODO: this is (largely) copied from NobodyWhoChat
         let mut result = || -> Result<(), String> {
             let model = self.get_model()?;
 
