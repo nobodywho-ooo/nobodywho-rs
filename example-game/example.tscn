@@ -1,0 +1,24 @@
+[gd_scene load_steps=3 format=3 uid="uid://qir8gkg0qx5w"]
+
+[ext_resource type="Script" path="res://chat.gd" id="1_178kq"]
+[ext_resource type="Script" path="res://embedding.gd" id="2_rcagm"]
+
+[node name="Control" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="ChatModel" type="NobodyWhoModel" parent="."]
+model_path = "res://gemma-2-2b-it-Q4_K_M.gguf"
+
+[node name="EmbeddingModel" type="NobodyWhoModel" parent="."]
+model_path = "res://bge-small-en-v1.5-q8_0.gguf"
+
+[node name="NobodyWhoChat" type="NobodyWhoChat" parent="."]
+script = ExtResource("1_178kq")
+
+[node name="NobodyWhoEmbedding" type="NobodyWhoEmbedding" parent="."]
+script = ExtResource("2_rcagm")

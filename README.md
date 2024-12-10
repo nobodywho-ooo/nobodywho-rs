@@ -1,7 +1,8 @@
 ![Nobody Who](./assets/banner.png)
 
-[![Matrix](https://img.shields.io/matrix/nobodywho:matrix.org?logo=matrix&style=flat-square)](https://matrix.to/#/#nobodywho:matrix.org)
+[![Godot Engine](https://img.shields.io/badge/Godot-%23FFFFFF.svg?logo=godot-engine)](https://godotengine.org/asset-library/asset/2886)
 [![Discord](https://img.shields.io/discord/1308812521456799765?logo=discord&style=flat-square)](https://discord.gg/qhaMc2qCYB)
+[![Matrix](https://img.shields.io/badge/Matrix-000?logo=matrix&logoColor=fff)](https://matrix.to/#/#nobodywho:matrix.org)
 [![Mastodon](https://img.shields.io/badge/Mastodon-6364FF?logo=mastodon&logoColor=fff&style=flat-square)](https://mastodon.gamedev.place/@nobodywho)
 
 NobodyWho is a plugin for the Godot game engine that lets you interact with local LLMs for interactive storytelling.
@@ -22,46 +23,58 @@ Once you have a GGUF model file, you can add a `NobodyWhoModel` node to your God
 
 `NobodyWhoModel` contains the weights of the model. The model takes up a lot of RAM, and can take a little while to initialize, so if you plan on having several characters/conversations, it's a big advantage to point to the same `NobodyWhoModel` node.
 
-Now you can add a `NobodyWhoPromptChat` node to your scene. From the node inspector, set the "Model Node" field, to show this chat node where to find the `NobodyWhoModel`.
+Now you can add a `NobodyWhoChat` node to your scene. From the node inspector, set the "Model Node" field, to show this chat node where to find the `NobodyWhoModel`.
 Also in the inspector, you can provide a prompt, which gives the LLM instructions on how to carry out the chat.
 
-Now you can add a script to the `NobodyWhoPromptChat` node, to provide your chat interaction.
+Now you can add a script to the `NobodyWhoChat` node, to provide your chat interaction.
 
-`NobodyWhoPromptChat` uses this programming interface:
-    - `say(text)`: a function that can be used to send text from the user to the LLM.
-    - `completion_updated(text)`: a signal with a string parameter, that is emitted every time the LLM produces more text. Contains roughly one word per invocation.
-    - `completion_finished()`: a signal which indicates that the LLM is done speaking.
+`NobodyWhoChat` uses this programming interface:
+    - `say(text: String)`: a function that can be used to send text from the user to the LLM.
+    - `response_updated(token: String)`: a signal that is emitted every time the LLM produces more text. Contains roughly one word per invocation.
+    - `response_finished(response: String)`: a signal which indicates that the LLM is done speaking.
     - `start_worker()`: a function that starts the LLM worker. The LLM needs a few seconds to get ready before chatting, so you may want to call this ahead of time.
 
 
-## Example `NobodyWhoPromptChat` script
+## Example `NobodyWhoChat` script
 
 ```gdscript
-extends NobodyWhoPromptChat
+extends NobodyWhoChat
 
-func user_sent_some_text(text):
-    # call this function whenever the user submits some new text
-    # for example when hitting "enter" in a text input or something like that
-    say(text)
-    disable_user_input()
+func _ready():
+	# configure node
+	model_node = get_node("../ChatModel")
+	system_prompt = "You are an evil wizard. Always try to curse anyone who talks to you."
 
-func _on_completion_updated(text):
-    # attach the completion_updated signal to this function
-    # it will be called every time the LLM produces some new text
-    show_new_text_on_screen(text)
+	# say soemthing
+	say("Hi there! Who are you?")
 
-func _on_completion_finished():
-    # attach the completion_finished signal to this function
-    # it will be called when the LLM is done producing new text
-    enable_user_input()
+	# wait for the response
+	var response = await response_finished
+	print("Got response: " + response)
+```
 
-func show_new_text_on_screen(text):
-    # ...omitted. Write your own chat ui code here.
 
-func enable_user_input():
-    # ...omitted. Write your own chat ui code here.
+## Example `NobodyWhoEmbedding` script
 
-func disable_user_input():
-    # ...omitted. Write your own chat ui code here.
+```gdscript
+extends NobodyWhoEmbedding
 
+func _ready():
+    # configure node
+    self.model_node = get_node("../EmbeddingModel")
+
+    # generate some embeddings
+    embed("The dragon is on the hill.")
+    var dragon_hill_embd = await self.embedding_finished
+
+    embed("The dragon is hungry for humans.")
+    var dragon_hungry_embd = await self.embedding_finished
+
+    embed("This doesn't matter.")
+    var irrelevant_embd = await self.embedding_finished
+
+    # test similarity
+    var low_similarity = cosine_similarity(irrelevant_embd, dragon_hill_embd)
+    var high_similarity = cosine_similarity(dragon_hill_embd, dragon_hungry_embd) 
+    assert(low_similarity < high_similarity)
 ```
