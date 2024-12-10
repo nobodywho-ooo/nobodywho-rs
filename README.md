@@ -22,46 +22,33 @@ Once you have a GGUF model file, you can add a `NobodyWhoModel` node to your God
 
 `NobodyWhoModel` contains the weights of the model. The model takes up a lot of RAM, and can take a little while to initialize, so if you plan on having several characters/conversations, it's a big advantage to point to the same `NobodyWhoModel` node.
 
-Now you can add a `NobodyWhoPromptChat` node to your scene. From the node inspector, set the "Model Node" field, to show this chat node where to find the `NobodyWhoModel`.
+Now you can add a `NobodyWhoChat` node to your scene. From the node inspector, set the "Model Node" field, to show this chat node where to find the `NobodyWhoModel`.
 Also in the inspector, you can provide a prompt, which gives the LLM instructions on how to carry out the chat.
 
-Now you can add a script to the `NobodyWhoPromptChat` node, to provide your chat interaction.
+Now you can add a script to the `NobodyWhoChat` node, to provide your chat interaction.
 
-`NobodyWhoPromptChat` uses this programming interface:
+`NobodyWhoChat` uses this programming interface:
     - `say(text)`: a function that can be used to send text from the user to the LLM.
-    - `completion_updated(text)`: a signal with a string parameter, that is emitted every time the LLM produces more text. Contains roughly one word per invocation.
-    - `completion_finished()`: a signal which indicates that the LLM is done speaking.
+    - `response_updated(token: String)`: a signal that is emitted every time the LLM produces more text. Contains roughly one word per invocation.
+    - `response_finished(response: String)`: a signal which indicates that the LLM is done speaking.
     - `start_worker()`: a function that starts the LLM worker. The LLM needs a few seconds to get ready before chatting, so you may want to call this ahead of time.
 
 
-## Example `NobodyWhoPromptChat` script
+## Example `NobodyWhoChat` script
 
 ```gdscript
-extends NobodyWhoPromptChat
+extends NobodyWhoChat
 
-func user_sent_some_text(text):
-    # call this function whenever the user submits some new text
-    # for example when hitting "enter" in a text input or something like that
-    say(text)
-    disable_user_input()
+# configure node
+self.model_node = $../NobodyWhoModel
+self.system_prompt = "You are an evil wizard. Always try to curse anyone who talks to you."
 
-func _on_completion_updated(text):
-    # attach the completion_updated signal to this function
-    # it will be called every time the LLM produces some new text
-    show_new_text_on_screen(text)
+# say soemthing
+say("Hi there! Who are you?")
 
-func _on_completion_finished():
-    # attach the completion_finished signal to this function
-    # it will be called when the LLM is done producing new text
-    enable_user_input()
-
-func show_new_text_on_screen(text):
-    # ...omitted. Write your own chat ui code here.
-
-func enable_user_input():
-    # ...omitted. Write your own chat ui code here.
-
-func disable_user_input():
-    # ...omitted. Write your own chat ui code here.
-
+# wait for the response
+var response = await self.response_finished
+print("Got response: " + response)
 ```
+
+
