@@ -289,30 +289,26 @@ impl INode for NobodyWhoEmbedding {
     }
 
     fn physics_process(&mut self, _delta: f64) {
-        loop {
-            if let Some(rx) = self.embedding_rx.as_ref() {
-                match rx.try_recv() {
-                    Ok(llm::EmbeddingsOutput::FatalError(errmsg)) => {
-                        godot_error!("Embeddings worker crashed: {errmsg}");
-                        self.embedding_rx = None; // un-set here to avoid spamming error message
-                    }
-                    Ok(llm::EmbeddingsOutput::Embedding(embd)) => {
-                        self.base_mut().emit_signal(
-                            "embedding_finished",
-                            &[PackedFloat32Array::from(embd).to_variant()],
-                        );
-                    }
-                    Err(std::sync::mpsc::TryRecvError::Empty) => {
-                        // got nothing yet - no worries
-                        break;
-                    }
-                    Err(std::sync::mpsc::TryRecvError::Disconnected) => {
-                        godot_error!("Unexpected: Embeddings worker channel disconnected");
-                        self.embedding_rx = None; // un-set here to avoid spamming error message
-                    }
+        while let Some(rx) = self.embedding_rx.as_ref() {
+            match rx.try_recv() {
+                Ok(llm::EmbeddingsOutput::FatalError(errmsg)) => {
+                    godot_error!("Embeddings worker crashed: {errmsg}");
+                    self.embedding_rx = None; // un-set here to avoid spamming error message
                 }
-            } else {
-                break;
+                Ok(llm::EmbeddingsOutput::Embedding(embd)) => {
+                    self.base_mut().emit_signal(
+                        "embedding_finished",
+                        &[PackedFloat32Array::from(embd).to_variant()],
+                    );
+                }
+                Err(std::sync::mpsc::TryRecvError::Empty) => {
+                    // got nothing yet - no worries
+                    break;
+                }
+                Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                    godot_error!("Unexpected: Embeddings worker channel disconnected");
+                    self.embedding_rx = None; // un-set here to avoid spamming error message
+                }
             }
         }
     }
@@ -360,7 +356,7 @@ impl NobodyWhoEmbedding {
     fn embed(&mut self, text: String) -> Signal {
         // returns signal, so that you can `var vec = await embed("Hello, world!")`
         if let Some(tx) = &self.text_tx {
-            if let Err(_) = tx.send(text) {
+            if tx.send(text).is_err() {
                 godot_error!("Embedding worker died.");
             }
         } else {
