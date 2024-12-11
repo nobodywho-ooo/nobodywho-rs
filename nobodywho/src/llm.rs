@@ -230,9 +230,6 @@ fn run_completion_worker_result(
             return Err(WorkerError::ContextLengthExceededError);
         }
 
-        // The `Decoder`
-        let mut utf8decoder = encoding_rs::UTF_8.new_decoder();
-
         let mut response = String::new();
 
         loop {
@@ -257,12 +254,13 @@ fn run_completion_worker_result(
                     break;
                 }
 
-                let output_bytes = ctx.model.token_to_bytes(new_token_id, Special::Tokenize)?;
-
-                // use `Decoder.decode_to_string()` to avoid the intermediate buffer
-                let mut output_string = String::with_capacity(32);
-                let _decode_result =
-                    utf8decoder.decode_to_string(&output_bytes, &mut output_string, false);
+                // the longest token I've seen is llama3.2's token 119224, at 96 bytes
+                const MAX_TOKEN_STR_LEN: usize = 128;
+                let output_string = ctx.model.token_to_str_with_size(
+                    new_token_id,
+                    MAX_TOKEN_STR_LEN,
+                    Special::Tokenize,
+                )?;
 
                 response.push_str(&output_string);
 
