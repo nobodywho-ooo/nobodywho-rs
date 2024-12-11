@@ -4,7 +4,6 @@ use llama_cpp_2::llama_batch::LlamaBatch;
 use llama_cpp_2::model::params::LlamaModelParams;
 use llama_cpp_2::model::LlamaModel;
 use llama_cpp_2::model::{AddBos, Special};
-use llama_cpp_2::sampling::params::LlamaSamplerChainParams;
 use llama_cpp_2::sampling::LlamaSampler;
 use llama_cpp_2::token::LlamaToken;
 use std::pin::pin;
@@ -100,28 +99,27 @@ pub const DEFAULT_SAMPLER_CONFIG: SamplerConfig = SamplerConfig {
     mirostat_eta: 0.1,
 };
 
-fn make_sampler(
-    model: &LlamaModel,
-    config: SamplerConfig,
-) -> Result<LlamaSampler, llama_cpp_2::LlamaSamplerError> {
+fn make_sampler(model: &LlamaModel, config: SamplerConfig) -> LlamaSampler {
     // init mirostat sampler
-    let sampler_params = LlamaSamplerChainParams::default();
-    let sampler = LlamaSampler::new(sampler_params)?
-        .add_penalties(
-            model.n_vocab(),
-            model.token_eos().0,
-            model.token_nl().0,
-            config.penalty_last_n,
-            config.penalty_repeat,
-            config.penalty_freq,
-            config.penalty_present,
-            config.penalize_nl,
-            config.ignore_eos,
-        )
-        .add_temp(config.temperature)
-        .add_mirostat_v2(config.seed, config.mirostat_tau, config.mirostat_eta);
-
-    Ok(sampler)
+    LlamaSampler::chain(
+        [
+            LlamaSampler::penalties(
+                model.n_vocab(),
+                model.token_eos().0,
+                model.token_nl().0,
+                config.penalty_last_n,
+                config.penalty_repeat,
+                config.penalty_freq,
+                config.penalty_present,
+                config.penalize_nl,
+                config.ignore_eos,
+            ),
+            LlamaSampler::temp(config.temperature),
+            //LlamaSampler::mirostat_v2(config.seed, config.mirostat_tau, config.mirostat_eta),
+            LlamaSampler::dist(config.seed),
+        ],
+        true, // no pperf
+    )
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -131,9 +129,6 @@ pub enum WorkerError {
 
     #[error("Could not create context: {0}")]
     CreateContextError(#[from] llama_cpp_2::LlamaContextLoadError),
-
-    #[error("Could not create sampler: {0}")]
-    CreateSamplerError(#[from] llama_cpp_2::LlamaSamplerError),
 
     #[error("Could not tokenize string: {0}")]
     TokenizerError(#[from] llama_cpp_2::StringToTokenError),
@@ -207,7 +202,7 @@ fn run_completion_worker_result(
 
     let mut n_cur = 0;
 
-    let mut sampler = make_sampler(&model, sampler_config)?;
+    let mut sampler = make_sampler(&model, sampler_config);
 
     while let Ok(content) = message_rx.recv() {
         chat_state.add_message("user".to_string(), content);
@@ -436,13 +431,6 @@ mod tests {
             result.contains("Danish"),
             "Expected completion to contain 'Danish', got: {result}"
         );
-    }
-
-    #[test]
-    fn test_initialize_default_sampler() {
-        let model = get_model(test_model_path!(), true).expect("Failed loading model");
-        let sampler = make_sampler(&model, DEFAULT_SAMPLER_CONFIG);
-        assert!(sampler.is_ok(), "make_sampler returned an Err");
     }
 
     #[test]
