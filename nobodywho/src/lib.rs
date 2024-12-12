@@ -12,66 +12,85 @@ struct NobodyWhoExtension;
 #[gdextension]
 unsafe impl ExtensionLibrary for NobodyWhoExtension {}
 
+#[derive(GodotConvert, Var, Export, Debug, Clone, Copy)]
+#[godot(via=GString)]
+enum SamplerMethod {
+    Greedy,
+    Temperature,
+    MirostatV2
+}
+
 #[derive(GodotClass)]
 #[class(tool, base=Resource)]
 struct NobodyWhoSampler {
     base: Base<Resource>,
 
     #[export]
-    seed: u32,
-    #[export]
-    temperature: f32,
-    #[export]
-    penalty_last_n: i32,
-    #[export]
-    penalty_repeat: f32,
-    #[export]
-    penalty_freq: f32,
-    #[export]
-    penalty_present: f32,
-    #[export]
-    penalize_nl: bool,
-    #[export]
-    ignore_eos: bool,
-    #[export]
-    mirostat_tau: f32,
-    #[export]
-    mirostat_eta: f32,
+    method: SamplerMethod,
+
+    sampler_config: llm::SamplerConfig
 }
 
 #[godot_api]
 impl IResource for NobodyWhoSampler {
     fn init(base: Base<Resource>) -> Self {
-        Self {
-            base,
-            seed: llm::DEFAULT_SAMPLER_CONFIG.seed,
-            temperature: llm::DEFAULT_SAMPLER_CONFIG.temperature,
-            penalty_last_n: llm::DEFAULT_SAMPLER_CONFIG.penalty_last_n,
-            penalty_repeat: llm::DEFAULT_SAMPLER_CONFIG.penalty_repeat,
-            penalty_freq: llm::DEFAULT_SAMPLER_CONFIG.penalty_freq,
-            penalty_present: llm::DEFAULT_SAMPLER_CONFIG.penalty_present,
-            penalize_nl: llm::DEFAULT_SAMPLER_CONFIG.penalize_nl,
-            ignore_eos: llm::DEFAULT_SAMPLER_CONFIG.ignore_eos,
-            mirostat_tau: llm::DEFAULT_SAMPLER_CONFIG.mirostat_tau,
-            mirostat_eta: llm::DEFAULT_SAMPLER_CONFIG.mirostat_eta,
+        match llm::DEFAULT_SAMPLER_CONFIG {
+            llm::SamplerConfig::MirostatV2(config) => {
+                Self {
+                    method: SamplerMethod::MirostatV2,
+                    sampler_config: llm::DEFAULT_SAMPLER_CONFIG,
+                    base,
+                }
+            }
         }
+    }
+
+    fn get_property_list(&mut self) -> Vec<godot::meta::PropertyInfo> {
+        let base_properties = vec![
+        ];
+        let penalty_properties = vec![
+            godot::meta::PropertyInfo::new_export::<i32>("penalty_last_n"),
+            godot::meta::PropertyInfo::new_export::<f32>("penalty_repeat"),
+            godot::meta::PropertyInfo::new_export::<f32>("penalty_freq"),
+            godot::meta::PropertyInfo::new_export::<f32>("penalty_present"),
+            godot::meta::PropertyInfo::new_export::<bool>("penalize_nl"),
+            godot::meta::PropertyInfo::new_export::<bool>("ignore_eos"),
+        ];
+        let method_properties = match self.method {
+            SamplerMethod::Greedy => vec![],
+            SamplerMethod::Temperature => vec![
+                godot::meta::PropertyInfo::new_export::<u32>("seed"),
+                godot::meta::PropertyInfo::new_export::<f32>("temperature")
+            ],
+            SamplerMethod::MirostatV2 => vec![
+                godot::meta::PropertyInfo::new_export::<u32>("seed"),
+                godot::meta::PropertyInfo::new_export::<f32>("tau"),
+                godot::meta::PropertyInfo::new_export::<f32>("eta")
+            ]
+        };
+        base_properties.into_iter().chain(penalty_properties).chain(method_properties).collect()
+    }
+
+    // fn get_property() {
+    // }
+
+    fn set_property(&mut self, property: StringName, value: Variant) -> bool {
+        // let mut obj: Gd<Object> = self.base.to_gd().upcast::<Object>();
+        // // this line doesn't work:
+        // self.base.notify_property_list_changed();
+        if property == "method".into() {
+            let new_method = SamplerMethod::try_from_variant(&value).expect("Unexpected: Got invalid sampler method"); 
+            self.method = new_method;
+            self.base.to_gd().upcast::<Object>().notify_property_list_changed();
+            return true;
+        }
+        true
     }
 }
 
 impl NobodyWhoSampler {
     pub fn get_sampler_config(&self) -> llm::SamplerConfig {
-        llm::SamplerConfig {
-            seed: self.seed,
-            temperature: self.temperature,
-            penalty_last_n: self.penalty_last_n,
-            penalty_repeat: self.penalty_repeat,
-            penalty_freq: self.penalty_freq,
-            penalty_present: self.penalty_present,
-            penalize_nl: self.penalize_nl,
-            ignore_eos: self.ignore_eos,
-            mirostat_tau: self.mirostat_tau,
-            mirostat_eta: self.mirostat_eta,
-        }
+        llm::DEFAULT_SAMPLER_CONFIG
     }
 }
 
