@@ -188,7 +188,11 @@ fn run_completion_worker_result(
 ) -> Result<(), WorkerError> {
     // according to llama.cpp source code, the longest known template is about 1200bytes
     let chat_template = model.get_chat_template(4_000)?;
-    let mut chat_state = chat_state::ChatState::new(chat_template);
+    let mut chat_state = chat_state::ChatState::new(
+        chat_template,
+        model.token_to_str(model.token_bos(), Special::Tokenize)?,
+        model.token_to_str(model.token_eos(), Special::Tokenize)?,
+    );
     chat_state.add_message("system".to_string(), system_prompt);
 
     let n_threads = std::thread::available_parallelism()?.get() as i32;

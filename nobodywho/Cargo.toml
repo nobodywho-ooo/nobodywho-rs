@@ -18,6 +18,7 @@ thiserror = "2.0.3"
 minijinja = { version = "2.5.0", features = ["builtins", "json", "loader"] }
 serde = { version = "1.0.215", features = ["derive"] }
 wgpu = "23.0.0"
+chrono = "0.4.39"
 
 [target.'cfg(not(target_os = "macos"))'.dependencies]
 llama-cpp-2 = { git = "https://github.com/utilityai/llama-cpp-rs", rev = "4d1df04", features = [ "vulkan" ] }
