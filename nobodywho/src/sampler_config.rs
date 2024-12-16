@@ -21,32 +21,40 @@ impl Default for SamplerConfig {
             penalty_present: 0.0,
             penalize_nl: false,
             ignore_eos: false,
-            method: SamplerMethod::Temperature(TemperatureConfig::default()),
-            // method : SamplerMethod::MirostatV2(MirostatV2Config {
-            //     seed: 1234,
-            //     temperature: 0.8,
-            //     tau: 5.0,
-            //     eta: 0.1,
-            // }),
+            method: SamplerMethod::MirostatV2(MirostatV2 {
+                seed: 1234,
+                temperature: 0.8,
+                tau: 5.0,
+                eta: 0.1,
+            }),
         }
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum SamplerMethod {
-    MirostatV2(MirostatV2Config),
-    Temperature(TemperatureConfig),
-    TopK(TopKConfig),
-    Greedy,
+    MirostatV2(MirostatV2),
+    Temperature(Temperature),
+    TopK(TopK),
+    Greedy(Greedy),
 }
 
-#[derive(Clone)]
-pub struct TopKConfig {
+#[derive(Clone, Debug)]
+pub struct Greedy {}
+
+impl Default for Greedy {
+    fn default() -> Self {
+        Self {}
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct TopK {
     pub top_k: i32,
     pub seed: u32,
 }
 
-impl Default for TopKConfig {
+impl Default for TopK {
     fn default() -> Self {
         Self {
             top_k: 40,
@@ -55,15 +63,15 @@ impl Default for TopKConfig {
     }
 }
 
-#[derive(Clone)]
-pub struct MirostatV2Config {
+#[derive(Clone, Debug)]
+pub struct MirostatV2 {
     pub seed: u32,
     pub temperature: f32,
     pub tau: f32,
     pub eta: f32,
 }
 
-impl Default for MirostatV2Config {
+impl Default for MirostatV2 {
     fn default() -> Self {
         Self {
             seed: 1234,
@@ -74,13 +82,13 @@ impl Default for MirostatV2Config {
     }
 }
 
-#[derive(Clone)]
-pub struct TemperatureConfig {
+#[derive(Clone, Debug)]
+pub struct Temperature {
     pub seed: u32,
     pub temperature: f32,
 }
 
-impl Default for TemperatureConfig {
+impl Default for Temperature {
     fn default() -> Self {
         Self {
             seed: 1234,
@@ -117,7 +125,7 @@ pub fn make_sampler(model: &LlamaModel, sampler_config: SamplerConfig) -> LlamaS
                 LlamaSampler::dist(conf.seed),
             ]
         }
-        SamplerMethod::Greedy => {
+        SamplerMethod::Greedy(_) => {
             vec![penalties, LlamaSampler::greedy()]
         }
         SamplerMethod::TopK(conf) => {
