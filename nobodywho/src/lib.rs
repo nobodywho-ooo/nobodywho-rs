@@ -17,7 +17,8 @@ unsafe impl ExtensionLibrary for NobodyWhoExtension {}
 enum SamplerMethodName {
     Greedy,
     Temperature,
-    MirostatV2
+    MirostatV2,
+    TopK,
 }
 
 #[derive(GodotClass)]
@@ -37,6 +38,7 @@ impl IResource for NobodyWhoSampler {
         let methodname = match llm::SamplerConfig::default().method {
             llm::SamplerMethod::MirostatV2(_) => SamplerMethodName::MirostatV2,
             llm::SamplerMethod::Temperature(_) => SamplerMethodName::Temperature,
+            llm::SamplerMethod::TopK(_) => SamplerMethodName::TopK,
             llm::SamplerMethod::Greedy => SamplerMethodName::Greedy,
         };
         Self {
@@ -68,7 +70,11 @@ impl IResource for NobodyWhoSampler {
                 godot::meta::PropertyInfo::new_export::<f32>("temperature"),
                 godot::meta::PropertyInfo::new_export::<f32>("tau"),
                 godot::meta::PropertyInfo::new_export::<f32>("eta")
-            ]
+            ],
+            SamplerMethodName::TopK => vec![
+                godot::meta::PropertyInfo::new_export::<u32>("seed"),
+                godot::meta::PropertyInfo::new_export::<i32>("top_k"),
+            ],
         };
         base_properties.into_iter().chain(penalty_properties).chain(method_properties).collect()
     }
@@ -88,6 +94,8 @@ impl IResource for NobodyWhoSampler {
             (llm::SamplerMethod::MirostatV2(conf), "tau") => Some(Variant::from(conf.tau)),
             (llm::SamplerMethod::MirostatV2(conf), "temperature") => Some(Variant::from(conf.temperature)),
             (llm::SamplerMethod::MirostatV2(conf), "seed") => Some(Variant::from(conf.seed)),
+            (llm::SamplerMethod::TopK(conf), "top_k") => Some(Variant::from(conf.top_k)),
+            (llm::SamplerMethod::TopK(conf), "seed") => Some(Variant::from(conf.seed)),
             _ => {
                 // self.base.to_gd().get_property()
                 None
@@ -104,6 +112,7 @@ impl IResource for NobodyWhoSampler {
                 self.sampler_config.method = match new_method {
                     SamplerMethodName::Temperature => llm::SamplerMethod::Temperature(llm::TemperatureConfig::default()),
                     SamplerMethodName::MirostatV2 => llm::SamplerMethod::MirostatV2(llm::MirostatV2Config::default()),
+                    SamplerMethodName::TopK => llm::SamplerMethod::TopK(llm::TopKConfig::default()),
                     SamplerMethodName::Greedy => llm::SamplerMethod::Greedy,
                 };
                 self.base.to_gd().upcast::<Object>().notify_property_list_changed();
@@ -145,6 +154,13 @@ impl IResource for NobodyWhoSampler {
                 conf.temperature = f32::try_from_variant(&value).expect("Unexpected type for temperature");
             }
             (llm::SamplerMethod::MirostatV2(conf), "seed") => {
+                conf.seed = u32::try_from_variant(&value).expect("Unexpected type for seed");
+            }
+
+            (llm::SamplerMethod::TopK(conf), "top_k") => {
+                conf.top_k = i32::try_from_variant(&value).expect("Unexpected type for top_k");
+            }
+            (llm::SamplerMethod::TopK(conf), "seed") => {
                 conf.seed = u32::try_from_variant(&value).expect("Unexpected type for seed");
             }
             _ => godot_warn!("Set unexpected property name: {:?}", property)
