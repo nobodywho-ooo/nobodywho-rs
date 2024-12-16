@@ -14,7 +14,7 @@ unsafe impl ExtensionLibrary for NobodyWhoExtension {}
 
 #[derive(GodotConvert, Var, Export, Debug, Clone, Copy)]
 #[godot(via=GString)]
-enum SamplerMethod {
+enum SamplerMethodName {
     Greedy,
     Temperature,
     MirostatV2
@@ -26,7 +26,7 @@ struct NobodyWhoSampler {
     base: Base<Resource>,
 
     #[export]
-    method: SamplerMethod,
+    method: SamplerMethodName,
 
     sampler_config: llm::SamplerConfig
 }
@@ -34,14 +34,15 @@ struct NobodyWhoSampler {
 #[godot_api]
 impl IResource for NobodyWhoSampler {
     fn init(base: Base<Resource>) -> Self {
-        match llm::DEFAULT_SAMPLER_CONFIG {
-            llm::SamplerConfig::MirostatV2(config) => {
-                Self {
-                    method: SamplerMethod::MirostatV2,
-                    sampler_config: llm::DEFAULT_SAMPLER_CONFIG,
-                    base,
-                }
-            }
+        let methodname = match llm::DEFAULT_SAMPLER_CONFIG.method {
+            llm::SamplerMethod::MirostatV2(_) => SamplerMethodName::MirostatV2,
+            llm::SamplerMethod::Temperature(_) => SamplerMethodName::Temperature,
+            llm::SamplerMethod::Greedy => SamplerMethodName::Greedy,
+        };
+        Self {
+            method: methodname,
+            sampler_config: llm::DEFAULT_SAMPLER_CONFIG,
+            base,
         }
     }
 
@@ -57,13 +58,14 @@ impl IResource for NobodyWhoSampler {
             godot::meta::PropertyInfo::new_export::<bool>("ignore_eos"),
         ];
         let method_properties = match self.method {
-            SamplerMethod::Greedy => vec![],
-            SamplerMethod::Temperature => vec![
+            SamplerMethodName::Greedy => vec![],
+            SamplerMethodName::Temperature => vec![
                 godot::meta::PropertyInfo::new_export::<u32>("seed"),
-                godot::meta::PropertyInfo::new_export::<f32>("temperature")
+                godot::meta::PropertyInfo::new_export::<f32>("temperature"),
             ],
-            SamplerMethod::MirostatV2 => vec![
+            SamplerMethodName::MirostatV2 => vec![
                 godot::meta::PropertyInfo::new_export::<u32>("seed"),
+                godot::meta::PropertyInfo::new_export::<f32>("temperature"),
                 godot::meta::PropertyInfo::new_export::<f32>("tau"),
                 godot::meta::PropertyInfo::new_export::<f32>("eta")
             ]
@@ -71,28 +73,78 @@ impl IResource for NobodyWhoSampler {
         base_properties.into_iter().chain(penalty_properties).chain(method_properties).collect()
     }
 
-    // fn get_property() {
-    // }
+    fn get_property(&self, property: StringName) -> Option<Variant> {
+        match (&self.sampler_config.method, property.to_string().as_str()) {
+            (_, "method") => Some(Variant::from(self.method)),
+            (_, "penalty_last_n") => Some(Variant::from(self.sampler_config.penalty_last_n)),
+            (_, "penalty_repeat") => Some(Variant::from(self.sampler_config.penalty_repeat)),
+            (_, "penalty_freq") => Some(Variant::from(self.sampler_config.penalty_freq)),
+            (_, "penalty_present") => Some(Variant::from(self.sampler_config.penalty_present)),
+            (_, "penalize_nl") => Some(Variant::from(self.sampler_config.penalize_nl)),
+            (_, "ignore_eos") => Some(Variant::from(self.sampler_config.ignore_eos)),
+            (llm::SamplerMethod::Temperature(conf), "temperature") => Some(Variant::from(conf.temperature)),
+            (llm::SamplerMethod::Temperature(conf), "seed") => Some(Variant::from(conf.seed)),
+            (llm::SamplerMethod::MirostatV2(conf), "eta") => Some(Variant::from(conf.eta)),
+            (llm::SamplerMethod::MirostatV2(conf), "tau") => Some(Variant::from(conf.tau)),
+            (llm::SamplerMethod::MirostatV2(conf), "temperature") => Some(Variant::from(conf.temperature)),
+            (llm::SamplerMethod::MirostatV2(conf), "seed") => Some(Variant::from(conf.seed)),
+            _ => panic!("Unexpected get property: {:?}", property)
+        }
+    }
 
     fn set_property(&mut self, property: StringName, value: Variant) -> bool {
-        // let mut obj: Gd<Object> = self.base.to_gd().upcast::<Object>();
-        // // this line doesn't work:
-        // self.base.notify_property_list_changed();
-        if property == "method".into() {
-            let new_method = SamplerMethod::try_from_variant(&value).expect("Unexpected: Got invalid sampler method"); 
-            self.method = new_method;
-            self.base.to_gd().upcast::<Object>().notify_property_list_changed();
-            return true;
+        match (&mut self.sampler_config.method, property.to_string().as_str()) {
+            (_, "method") => {
+                let new_method = SamplerMethodName::try_from_variant(&value).expect("Unexpected: Got invalid sampler method"); 
+                self.method = new_method;
+                self.base.to_gd().upcast::<Object>().notify_property_list_changed();
+                return true;
+            }
+            (_, "penalty_last_n") => {
+                self.sampler_config.penalty_last_n = i32::try_from_variant(&value).expect("Unexpected type for penalty_last_n");
+            }
+            (_, "penalty_repeat") => {
+                self.sampler_config.penalty_repeat = f32::try_from_variant(&value).expect("Unexpected type for penalty_repeat");
+            }
+            (_, "penalty_freq") => {
+                self.sampler_config.penalty_freq = f32::try_from_variant(&value).expect("Unexpected type for penalty_freq");
+            }
+            (_, "penalty_present") => {
+                self.sampler_config.penalty_present = f32::try_from_variant(&value).expect("Unexpected type for penalty_present");
+            }
+            (_, "penalize_nl") => {
+                self.sampler_config.penalize_nl = bool::try_from_variant(&value).expect("Unexpected type for penalize_nl");
+            }
+            (_, "ignore_eos") => {
+                self.sampler_config.ignore_eos = bool::try_from_variant(&value).expect("Unexpected type for ignore_eos");
+            }
+
+            (llm::SamplerMethod::Temperature(conf), "seed") => {
+                conf.seed = u32::try_from_variant(&value).expect("Unexpected type for seed");
+            }
+            (llm::SamplerMethod::Temperature(conf), "temperature") => {
+                conf.temperature = f32::try_from_variant(&value).expect("Unexpected type for temperature");
+            }
+
+            (llm::SamplerMethod::MirostatV2(conf), "tau") => {
+                conf.tau = f32::try_from_variant(&value).expect("Unexpected type for tau");
+            }
+            (llm::SamplerMethod::MirostatV2(conf), "eta") => {
+                conf.eta = f32::try_from_variant(&value).expect("Unexpected type for eta");
+            }
+            (llm::SamplerMethod::MirostatV2(conf), "temperature") => {
+                conf.temperature = f32::try_from_variant(&value).expect("Unexpected type for temperature");
+            }
+            (llm::SamplerMethod::MirostatV2(conf), "seed") => {
+                conf.seed = u32::try_from_variant(&value).expect("Unexpected type for seed");
+            }
+            _ => panic!("Unexpected property name: {:?}", property)
         }
         true
+
     }
 }
 
-impl NobodyWhoSampler {
-    pub fn get_sampler_config(&self) -> llm::SamplerConfig {
-        llm::DEFAULT_SAMPLER_CONFIG
-    }
-}
 
 #[derive(GodotClass)]
 #[class(base=Node)]
@@ -222,7 +274,7 @@ impl NobodyWhoChat {
     fn get_sampler_config(&mut self) -> SamplerConfig {
         if let Some(gd_sampler) = self.sampler.as_mut() {
             let nobody_sampler: GdRef<NobodyWhoSampler> = gd_sampler.bind();
-            nobody_sampler.get_sampler_config()
+            nobody_sampler.sampler_config.clone()
         } else {
             llm::DEFAULT_SAMPLER_CONFIG
         }
