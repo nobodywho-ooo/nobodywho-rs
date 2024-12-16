@@ -4,7 +4,6 @@ use llama_cpp_2::llama_batch::LlamaBatch;
 use llama_cpp_2::model::params::LlamaModelParams;
 use llama_cpp_2::model::LlamaModel;
 use llama_cpp_2::model::{AddBos, Special};
-use llama_cpp_2::sampling::LlamaSampler;
 use llama_cpp_2::token::LlamaToken;
 use std::pin::pin;
 use std::sync::mpsc::{Receiver, Sender};
@@ -338,7 +337,7 @@ mod tests {
                 model,
                 prompt_rx,
                 completion_tx,
-                DEFAULT_SAMPLER_CONFIG,
+                SamplerConfig::default(),
                 4096,
                 system_prompt,
             )
