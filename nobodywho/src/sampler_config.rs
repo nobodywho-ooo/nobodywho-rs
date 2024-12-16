@@ -33,10 +33,15 @@ impl Default for SamplerConfig {
 
 #[derive(Clone, Debug)]
 pub enum SamplerMethod {
-    MirostatV2(MirostatV2),
-    Temperature(Temperature),
-    TopK(TopK),
     Greedy(Greedy),
+    TopK(TopK),
+    TopP(TopP),
+    MinP(MinP),
+    XTC(XTC),
+    TypicalP(TypicalP),
+    Temperature(Temperature),
+    MirostatV1(MirostatV1),
+    MirostatV2(MirostatV2),
 }
 
 #[derive(Clone, Debug)]
@@ -64,20 +69,71 @@ impl Default for TopK {
 }
 
 #[derive(Clone, Debug)]
-pub struct MirostatV2 {
+pub struct TopP {
     pub seed: u32,
-    pub temperature: f32,
-    pub tau: f32,
-    pub eta: f32,
+    pub min_keep: u32,
+    pub top_p: f32,
 }
 
-impl Default for MirostatV2 {
+impl Default for TopP {
     fn default() -> Self {
         Self {
             seed: 1234,
-            temperature: 0.8,
-            tau: 5.0,
-            eta: 0.1,
+            top_p: 0.95,
+            min_keep: 0,
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct MinP {
+    pub seed: u32,
+    pub min_keep: u32,
+    pub min_p: f32,
+}
+
+impl Default for MinP {
+    fn default() -> Self {
+        Self {
+            seed: 1234,
+            min_p: 0.05,
+            min_keep: 0,
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct XTC {
+    pub seed: u32,
+    pub xtc_probability: f32,
+    pub xtc_threshold: f32,
+    pub min_keep: u32,
+}
+
+impl Default for XTC {
+    fn default() -> Self {
+        Self {
+            xtc_probability: 0.00,
+            xtc_threshold: 0.10,
+            min_keep: 0,
+            seed: 1234,
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct TypicalP {
+    pub seed: u32,
+    pub typ_p: f32,
+    pub min_keep: u32,
+}
+
+impl Default for TypicalP {
+    fn default() -> Self {
+        Self {
+            seed: 1234,
+            typ_p: 1.0,
+            min_keep: 0,
         }
     }
 }
@@ -97,6 +153,44 @@ impl Default for Temperature {
     }
 }
 
+#[derive(Clone, Debug)]
+pub struct MirostatV1 {
+    pub seed: u32,
+    pub temperature: f32,
+    pub tau: f32,
+    pub eta: f32,
+}
+
+impl Default for MirostatV1 {
+    fn default() -> Self {
+        Self {
+            seed: 1234,
+            temperature: 0.8,
+            tau: 5.0,
+            eta: 0.1,
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct MirostatV2 {
+    pub seed: u32,
+    pub temperature: f32,
+    pub tau: f32,
+    pub eta: f32,
+}
+
+impl Default for MirostatV2 {
+    fn default() -> Self {
+        Self {
+            seed: 1234,
+            temperature: 0.8,
+            tau: 5.0,
+            eta: 0.1,
+        }
+    }
+}
+
 pub fn make_sampler(model: &LlamaModel, sampler_config: SamplerConfig) -> LlamaSampler {
     // init mirostat sampler
     let penalties = LlamaSampler::penalties(
@@ -111,11 +205,47 @@ pub fn make_sampler(model: &LlamaModel, sampler_config: SamplerConfig) -> LlamaS
         sampler_config.ignore_eos,
     );
     let chainvec = match sampler_config.method {
-        SamplerMethod::MirostatV2(conf) => {
+        SamplerMethod::Greedy(_) => {
+            vec![penalties, LlamaSampler::greedy()]
+        }
+        SamplerMethod::TopK(conf) => {
             vec![
                 penalties,
-                LlamaSampler::temp(conf.temperature),
-                LlamaSampler::mirostat_v2(conf.seed, conf.tau, conf.eta),
+                LlamaSampler::top_k(conf.top_k),
+                LlamaSampler::dist(conf.seed),
+            ]
+        }
+        SamplerMethod::TopP(conf) => {
+            vec![
+                penalties,
+                LlamaSampler::top_p(conf.top_p, conf.min_keep as usize),
+                LlamaSampler::dist(conf.seed),
+            ]
+        }
+        SamplerMethod::MinP(conf) => {
+            vec![
+                penalties,
+                LlamaSampler::top_p(conf.min_p, conf.min_keep as usize),
+                LlamaSampler::dist(conf.seed),
+            ]
+        }
+        SamplerMethod::XTC(conf) => {
+            vec![
+                penalties,
+                LlamaSampler::xtc(
+                    conf.xtc_probability,
+                    conf.xtc_threshold,
+                    conf.min_keep as usize,
+                    conf.seed,
+                ),
+                LlamaSampler::dist(conf.seed),
+            ]
+        }
+        SamplerMethod::TypicalP(conf) => {
+            vec![
+                penalties,
+                LlamaSampler::typical(conf.typ_p, conf.min_keep as usize),
+                LlamaSampler::dist(conf.seed),
             ]
         }
         SamplerMethod::Temperature(conf) => {
@@ -125,14 +255,19 @@ pub fn make_sampler(model: &LlamaModel, sampler_config: SamplerConfig) -> LlamaS
                 LlamaSampler::dist(conf.seed),
             ]
         }
-        SamplerMethod::Greedy(_) => {
-            vec![penalties, LlamaSampler::greedy()]
-        }
-        SamplerMethod::TopK(conf) => {
+        SamplerMethod::MirostatV1(conf) => {
             vec![
                 penalties,
-                LlamaSampler::top_k(conf.top_k),
-                LlamaSampler::dist(conf.seed),
+                LlamaSampler::temp(conf.temperature),
+                LlamaSampler::mirostat(model.n_vocab(), conf.seed, conf.tau, conf.eta, 100),
+                // this "100" is a mysterious value borrowed from llama.cpp's sampling.cpp
+            ]
+        }
+        SamplerMethod::MirostatV2(conf) => {
+            vec![
+                penalties,
+                LlamaSampler::temp(conf.temperature),
+                LlamaSampler::mirostat_v2(conf.seed, conf.tau, conf.eta),
             ]
         }
     };

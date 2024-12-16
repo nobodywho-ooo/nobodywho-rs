@@ -5,9 +5,14 @@ use godot::prelude::*;
 #[godot(via=GString)]
 enum SamplerMethodName {
     Greedy,
-    Temperature,
-    MirostatV2,
     TopK,
+    TopP,
+    MinP,
+    XTC,
+    TypicalP,
+    Temperature,
+    MirostatV1,
+    MirostatV2,
 }
 
 #[derive(GodotClass)]
@@ -124,10 +129,15 @@ macro_rules! set_property {
 impl IResource for NobodyWhoSampler {
     fn init(base: Base<Resource>) -> Self {
         let methodname = match sampler_config::SamplerConfig::default().method {
-            sampler_config::SamplerMethod::MirostatV2(_) => SamplerMethodName::MirostatV2,
-            sampler_config::SamplerMethod::Temperature(_) => SamplerMethodName::Temperature,
-            sampler_config::SamplerMethod::TopK(_) => SamplerMethodName::TopK,
             sampler_config::SamplerMethod::Greedy(_) => SamplerMethodName::Greedy,
+            sampler_config::SamplerMethod::TopK(_) => SamplerMethodName::TopK,
+            sampler_config::SamplerMethod::TopP(_) => SamplerMethodName::TopP,
+            sampler_config::SamplerMethod::MinP(_) => SamplerMethodName::MinP,
+            sampler_config::SamplerMethod::XTC(_) => SamplerMethodName::XTC,
+            sampler_config::SamplerMethod::TypicalP(_) => SamplerMethodName::TypicalP,
+            sampler_config::SamplerMethod::Temperature(_) => SamplerMethodName::Temperature,
+            sampler_config::SamplerMethod::MirostatV1(_) => SamplerMethodName::MirostatV1,
+            sampler_config::SamplerMethod::MirostatV2(_) => SamplerMethodName::MirostatV2,
         };
         Self {
             method: methodname,
@@ -148,10 +158,15 @@ impl IResource for NobodyWhoSampler {
                 ignore_eos: bool
             },
             methods: {
+                Greedy { },
+                TopK { seed: u32, top_k: i32 },
+                TopP { seed: u32, top_p: f32 },
+                MinP { seed: u32, min_keep: u32, min_p: f32 },
+                XTC { seed: u32, xtc_probability: f32, xtc_threshold: f32, min_keep: u32 },
+                TypicalP { seed: u32, typ_p: f32, min_keep: u32 },
                 Temperature { temperature: f32, seed: u32 },
-                MirostatV2 { temperature: f32, seed: u32, tau: f32, eta: f32 },
-                TopK { top_k: i32, seed: u32 },
-                Greedy { }
+                MirostatV1 { temperature: f32, seed: u32, tau: f32, eta: f32 },
+                MirostatV2 { temperature: f32, seed: u32, tau: f32, eta: f32 }
             }
         )
     }
@@ -168,10 +183,15 @@ impl IResource for NobodyWhoSampler {
                 ignore_eos: bool
             },
             methods: {
+                Greedy { },
+                TopK { seed: u32, top_k: i32 },
+                TopP { seed: u32, top_p: f32 },
+                MinP { seed: u32, min_keep: u32, min_p: f32 },
+                XTC { seed: u32, xtc_probability: f32, xtc_threshold: f32, min_keep: u32 },
+                TypicalP { seed: u32, typ_p: f32, min_keep: u32 },
                 Temperature { temperature: f32, seed: u32 },
-                MirostatV2 { temperature: f32, seed: u32, tau: f32, eta: f32 },
-                TopK { top_k: i32, seed: u32 },
-                Greedy { }
+                MirostatV1 { temperature: f32, seed: u32, tau: f32, eta: f32 },
+                MirostatV2 { temperature: f32, seed: u32, tau: f32, eta: f32 }
             }
         )
     }
@@ -188,10 +208,15 @@ impl IResource for NobodyWhoSampler {
                 ignore_eos: bool
             },
             methods: {
+                Greedy { },
+                TopK { seed: u32, top_k: i32 },
+                TopP { seed: u32, top_p: f32 },
+                MinP { seed: u32, min_keep: u32, min_p: f32 },
+                XTC { seed: u32, xtc_probability: f32, xtc_threshold: f32, min_keep: u32 },
+                TypicalP { seed: u32, typ_p: f32, min_keep: u32 },
                 Temperature { temperature: f32, seed: u32 },
-                MirostatV2 { temperature: f32, seed: u32, tau: f32, eta: f32 },
-                TopK { top_k: i32, seed: u32 },
-                Greedy { }
+                MirostatV1 { temperature: f32, seed: u32, tau: f32, eta: f32 },
+                MirostatV2 { temperature: f32, seed: u32, tau: f32, eta: f32 }
             }
         )
     }
