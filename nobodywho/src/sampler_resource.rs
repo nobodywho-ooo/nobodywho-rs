@@ -5,6 +5,7 @@ use godot::prelude::*;
 #[godot(via=GString)]
 enum SamplerMethodName {
     Greedy,
+    DRY,
     TopK,
     TopP,
     MinP,
@@ -39,6 +40,11 @@ macro_rules! property_list {
             ];
             let method_properties = match $self.method {
                 $(
+                    // makes patterns like this:
+                    // SamplerMethodName::Temperature => vec![
+                    //      godot::meta::PropertyInfo::new_export::<u32>("seed"),
+                    //      godot::meta::PropertyInfo::new_export::<f32>("temperature"),
+                    // ]
                     SamplerMethodName::$variant => vec![
                         $(
                             godot::meta::PropertyInfo::new_export::<$type>(stringify!($field)),
@@ -130,6 +136,7 @@ impl IResource for NobodyWhoSampler {
     fn init(base: Base<Resource>) -> Self {
         let methodname = match sampler_config::SamplerConfig::default().method {
             sampler_config::SamplerMethod::Greedy(_) => SamplerMethodName::Greedy,
+            sampler_config::SamplerMethod::DRY(_) => SamplerMethodName::DRY,
             sampler_config::SamplerMethod::TopK(_) => SamplerMethodName::TopK,
             sampler_config::SamplerMethod::TopP(_) => SamplerMethodName::TopP,
             sampler_config::SamplerMethod::MinP(_) => SamplerMethodName::MinP,
@@ -159,6 +166,7 @@ impl IResource for NobodyWhoSampler {
             },
             methods: {
                 Greedy { },
+                DRY { seed: u32, dry_multiplier: f32, dry_base: f32, dry_allowed_length: i32, dry_penalty_last_n: i32 },
                 TopK { seed: u32, top_k: i32 },
                 TopP { seed: u32, top_p: f32 },
                 MinP { seed: u32, min_keep: u32, min_p: f32 },
@@ -184,6 +192,7 @@ impl IResource for NobodyWhoSampler {
             },
             methods: {
                 Greedy { },
+                DRY { seed: u32, dry_multiplier: f32, dry_base: f32, dry_allowed_length: i32, dry_penalty_last_n: i32 },
                 TopK { seed: u32, top_k: i32 },
                 TopP { seed: u32, top_p: f32 },
                 MinP { seed: u32, min_keep: u32, min_p: f32 },
@@ -209,6 +218,7 @@ impl IResource for NobodyWhoSampler {
             },
             methods: {
                 Greedy { },
+                DRY { seed: u32, dry_multiplier: f32, dry_base: f32, dry_allowed_length: i32, dry_penalty_last_n: i32 },
                 TopK { seed: u32, top_k: i32 },
                 TopP { seed: u32, top_p: f32 },
                 MinP { seed: u32, min_keep: u32, min_p: f32 },

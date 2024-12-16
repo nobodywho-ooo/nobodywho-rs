@@ -34,6 +34,7 @@ impl Default for SamplerConfig {
 #[derive(Clone, Debug)]
 pub enum SamplerMethod {
     Greedy(Greedy),
+    DRY(DRY),
     TopK(TopK),
     TopP(TopP),
     MinP(MinP),
@@ -50,6 +51,27 @@ pub struct Greedy {}
 impl Default for Greedy {
     fn default() -> Self {
         Self {}
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct DRY {
+    pub seed: u32,
+    pub dry_multiplier: f32,
+    pub dry_base: f32,
+    pub dry_allowed_length: i32,
+    pub dry_penalty_last_n: i32,
+}
+
+impl Default for DRY {
+    fn default() -> Self {
+        Self {
+            seed: 1234,
+            dry_multiplier: 0.0,
+            dry_base: 1.75,
+            dry_allowed_length: 2,
+            dry_penalty_last_n: -1,
+        }
     }
 }
 
@@ -207,6 +229,20 @@ pub fn make_sampler(model: &LlamaModel, sampler_config: SamplerConfig) -> LlamaS
     let chainvec = match sampler_config.method {
         SamplerMethod::Greedy(_) => {
             vec![penalties, LlamaSampler::greedy()]
+        }
+        SamplerMethod::DRY(conf) => {
+            vec![
+                penalties,
+                LlamaSampler::dry(
+                    model,
+                    conf.dry_multiplier,
+                    conf.dry_base,
+                    conf.dry_allowed_length,
+                    conf.dry_penalty_last_n,
+                    vec!["\n", ":", "\"", "*"],
+                ),
+                LlamaSampler::dist(conf.seed),
+            ]
         }
         SamplerMethod::TopK(conf) => {
             vec![
