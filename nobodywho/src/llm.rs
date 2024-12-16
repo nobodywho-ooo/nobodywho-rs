@@ -111,6 +111,7 @@ pub enum SamplerMethod {
     Greedy,
 }
 
+#[derive(Clone)]
 pub struct TopKConfig {
     pub top_k: i32,
     pub seed: u32
@@ -169,7 +170,7 @@ fn make_sampler(model: &LlamaModel, sampler_config: SamplerConfig) -> LlamaSampl
         sampler_config.penalize_nl,
         sampler_config.ignore_eos,
     );
-    let methodvec = match sampler_config.method {
+    let chainvec = match sampler_config.method {
         SamplerMethod::MirostatV2(conf) => {
             vec![
                 penalties,
@@ -185,16 +186,19 @@ fn make_sampler(model: &LlamaModel, sampler_config: SamplerConfig) -> LlamaSampl
             ]
         }
         SamplerMethod::Greedy => {
-            vec![LlamaSampler::greedy()]
+            vec![
+                penalties,
+                LlamaSampler::greedy()
+            ]
         }
         SamplerMethod::TopK(conf) => {
             vec![
+                penalties,
                 LlamaSampler::top_k(conf.top_k),
                 LlamaSampler::dist(conf.seed)
             ]
         }
     };
-    let chainvec = vec![penalties].into_iter().chain(methodvec).collect();
     LlamaSampler::chain(chainvec, true)
 }
 
