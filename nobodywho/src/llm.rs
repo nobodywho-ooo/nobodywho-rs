@@ -82,6 +82,27 @@ pub struct SamplerConfig {
     pub ignore_eos: bool,
 }
 
+impl Default for SamplerConfig {
+    fn default () -> Self {
+        Self {
+            penalty_last_n: -1,
+            penalty_repeat: 0.0,
+            penalty_freq: 0.0,
+            penalty_present: 0.0,
+            penalize_nl: false,
+            ignore_eos: false,
+            method : SamplerMethod::Temperature(TemperatureConfig::default()),
+            // method : SamplerMethod::MirostatV2(MirostatV2Config {
+            //     seed: 1234,
+            //     temperature: 0.8,
+            //     tau: 5.0,
+            //     eta: 0.1,
+            // }),
+        }
+    }
+}
+
+
 #[derive(Clone)]
 pub enum SamplerMethod {
     MirostatV2(MirostatV2Config),
@@ -97,27 +118,31 @@ pub struct MirostatV2Config {
     pub eta: f32,
 }
 
+impl Default for MirostatV2Config {
+    fn default() -> Self {
+        Self {
+            seed: 1234,
+            temperature: 0.8,
+            tau: 5.0,
+            eta: 0.1
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct TemperatureConfig {
     pub seed: u32,
     pub temperature: f32,
 }
 
-// defaults here match the defaults read from `llama-cli --help`
-pub const DEFAULT_SAMPLER_CONFIG: SamplerConfig = SamplerConfig {
-    penalty_last_n: -1,
-    penalty_repeat: 0.0,
-    penalty_freq: 0.0,
-    penalty_present: 0.0,
-    penalize_nl: false,
-    ignore_eos: false,
-    method : SamplerMethod::MirostatV2(MirostatV2Config {
-        seed: 1234,
-        temperature: 0.8,
-        tau: 5.0,
-        eta: 0.1,
-    }),
-};
+impl Default for TemperatureConfig {
+    fn default() -> Self {
+        Self {
+            seed: 1234,
+            temperature: 0.8,
+        }
+    }
+}
 
 fn make_sampler(model: &LlamaModel, sampler_config: SamplerConfig) -> LlamaSampler {
     // init mirostat sampler

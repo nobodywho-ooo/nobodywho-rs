@@ -34,14 +34,14 @@ struct NobodyWhoSampler {
 #[godot_api]
 impl IResource for NobodyWhoSampler {
     fn init(base: Base<Resource>) -> Self {
-        let methodname = match llm::DEFAULT_SAMPLER_CONFIG.method {
+        let methodname = match llm::SamplerConfig::default().method {
             llm::SamplerMethod::MirostatV2(_) => SamplerMethodName::MirostatV2,
             llm::SamplerMethod::Temperature(_) => SamplerMethodName::Temperature,
             llm::SamplerMethod::Greedy => SamplerMethodName::Greedy,
         };
         Self {
             method: methodname,
-            sampler_config: llm::DEFAULT_SAMPLER_CONFIG,
+            sampler_config: llm::SamplerConfig::default(),
             base,
         }
     }
@@ -88,7 +88,11 @@ impl IResource for NobodyWhoSampler {
             (llm::SamplerMethod::MirostatV2(conf), "tau") => Some(Variant::from(conf.tau)),
             (llm::SamplerMethod::MirostatV2(conf), "temperature") => Some(Variant::from(conf.temperature)),
             (llm::SamplerMethod::MirostatV2(conf), "seed") => Some(Variant::from(conf.seed)),
-            _ => panic!("Unexpected get property: {:?}", property)
+            _ => {
+                // self.base.to_gd().get_property()
+                None
+            }
+            //panic!("Unexpected get property: {:?}", property)
         }
     }
 
@@ -97,6 +101,11 @@ impl IResource for NobodyWhoSampler {
             (_, "method") => {
                 let new_method = SamplerMethodName::try_from_variant(&value).expect("Unexpected: Got invalid sampler method"); 
                 self.method = new_method;
+                self.sampler_config.method = match new_method {
+                    SamplerMethodName::Temperature => llm::SamplerMethod::Temperature(llm::TemperatureConfig::default()),
+                    SamplerMethodName::MirostatV2 => llm::SamplerMethod::MirostatV2(llm::MirostatV2Config::default()),
+                    SamplerMethodName::Greedy => llm::SamplerMethod::Greedy,
+                };
                 self.base.to_gd().upcast::<Object>().notify_property_list_changed();
                 return true;
             }
@@ -138,7 +147,7 @@ impl IResource for NobodyWhoSampler {
             (llm::SamplerMethod::MirostatV2(conf), "seed") => {
                 conf.seed = u32::try_from_variant(&value).expect("Unexpected type for seed");
             }
-            _ => panic!("Unexpected property name: {:?}", property)
+            _ => godot_warn!("Set unexpected property name: {:?}", property)
         }
         true
 
@@ -276,7 +285,7 @@ impl NobodyWhoChat {
             let nobody_sampler: GdRef<NobodyWhoSampler> = gd_sampler.bind();
             nobody_sampler.sampler_config.clone()
         } else {
-            llm::DEFAULT_SAMPLER_CONFIG
+            llm::SamplerConfig::default()
         }
     }
 
