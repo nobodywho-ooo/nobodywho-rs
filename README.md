@@ -1,9 +1,9 @@
 ![Nobody Who](./assets/banner.png)
 
-[![Godot Engine](https://img.shields.io/badge/Godot-%23FFFFFF.svg?logo=godot-engine)](https://godotengine.org/asset-library/asset/2886)
 [![Discord](https://img.shields.io/discord/1308812521456799765?logo=discord&style=flat-square)](https://discord.gg/qhaMc2qCYB)
 [![Matrix](https://img.shields.io/badge/Matrix-000?logo=matrix&logoColor=fff)](https://matrix.to/#/#nobodywho:matrix.org)
 [![Mastodon](https://img.shields.io/badge/Mastodon-6364FF?logo=mastodon&logoColor=fff&style=flat-square)](https://mastodon.gamedev.place/@nobodywho)
+[![Godot Engine](https://img.shields.io/badge/Godot-%23FFFFFF.svg?logo=godot-engine)](https://godotengine.org/asset-library/asset/2886)
 
 NobodyWho is a plugin for the Godot game engine that lets you interact with local LLMs for interactive storytelling.
 
@@ -29,10 +29,11 @@ Also in the inspector, you can provide a prompt, which gives the LLM instruction
 Now you can add a script to the `NobodyWhoChat` node, to provide your chat interaction.
 
 `NobodyWhoChat` uses this programming interface:
-    - `say(text: String)`: a function that can be used to send text from the user to the LLM.
-    - `response_updated(token: String)`: a signal that is emitted every time the LLM produces more text. Contains roughly one word per invocation.
-    - `response_finished(response: String)`: a signal which indicates that the LLM is done speaking.
-    - `start_worker()`: a function that starts the LLM worker. The LLM needs a few seconds to get ready before chatting, so you may want to call this ahead of time.
+
+- `say(text: String)`: a function that can be used to send text from the user to the LLM.
+- `response_updated(token: String)`: a signal that is emitted every time the LLM produces more text. Contains roughly one word per invocation.
+- `response_finished(response: String)`: a signal which indicates that the LLM is done speaking.
+- `start_worker()`: a function that starts the LLM worker. The LLM needs a few seconds to get ready before chatting, so you may want to call this ahead of time.
 
 
 ## Example `NobodyWhoChat` script
@@ -45,12 +46,16 @@ func _ready():
 	model_node = get_node("../ChatModel")
 	system_prompt = "You are an evil wizard. Always try to curse anyone who talks to you."
 
-	# say soemthing
+	# say something
 	say("Hi there! Who are you?")
 
 	# wait for the response
 	var response = await response_finished
 	print("Got response: " + response)
+
+    # in this example we just use the `response_finished` signal to get the complete response
+    # in real-world-use you definitely want to connect `response_updated`, which gives one word at a time
+    # the whole interaction feels *much* smoother if you stream the response out word-by-word.
 ```
 
 
@@ -73,7 +78,8 @@ func _ready():
     embed("This doesn't matter.")
     var irrelevant_embd = await self.embedding_finished
 
-    # test similarity
+    # test similarity,
+    # here we show that two embeddings will have high similarity, if they mean similar things
     var low_similarity = cosine_similarity(irrelevant_embd, dragon_hill_embd)
     var high_similarity = cosine_similarity(dragon_hill_embd, dragon_hungry_embd) 
     assert(low_similarity < high_similarity)
