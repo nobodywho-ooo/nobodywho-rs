@@ -125,7 +125,7 @@ macro_rules! set_property {
                     }
                 )*
             )*
-            (variant, field_name) => unreachable!("Bad combination of method variant and property name: {:?} {:?}", variant, field_name),
+            (variant, field_name) => godot_warn!("Bad combination of method variant and property name: {:?} {:?}", variant, field_name),
         }
         true
     }};
