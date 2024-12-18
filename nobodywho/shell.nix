@@ -6,6 +6,7 @@ pkgs.mkShell {
   env.LIBCLANG_PATH = "${pkgs.libclang.lib}/lib/libclang.so";
   env.ANDROID_NDK = android_ndk;
   env.CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER = "${android_ndk}/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android34-clang";
+  env.CLANG_PATH = "${android_ndk}/toolchains/llvm/prebuilt/linux-x86_64/bin/clang";
 
   packages = [
     pkgs.cmake
