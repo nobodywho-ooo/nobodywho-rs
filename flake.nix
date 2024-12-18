@@ -7,7 +7,13 @@
   outputs = { nixpkgs, flake-utils, ... }:
     flake-utils.lib.eachDefaultSystem (system:
     let
-      pkgs = (import nixpkgs { system = system; });
+      pkgs = (import nixpkgs {
+        system = system;
+        config = {
+          android_sdk.accept_license = true;
+          allowUnfree = true; # You might need this too for Android SDK
+        };
+      });
     in
   {
       packages.default = pkgs.callPackage ./nobodywho {};
