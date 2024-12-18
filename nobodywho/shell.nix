@@ -1,7 +1,11 @@
 { pkgs ? import <nixpkgs> { }, ... }: 
+let
+  android_ndk = "${pkgs.androidenv.androidPkgs.ndk-bundle}/libexec/android-sdk/ndk/27.0.12077973";
+in
 pkgs.mkShell {
   env.LIBCLANG_PATH = "${pkgs.libclang.lib}/lib/libclang.so";
-  env.ANDROID_NDK = "${pkgs.androidenv.androidPkgs.ndk-bundle}/libexec/android-sdk/ndk/27.0.12077973";
+  env.ANDROID_NDK = android_ndk;
+  env.CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER = "${android_ndk}/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android34-clang";
 
   packages = [
     pkgs.cmake
