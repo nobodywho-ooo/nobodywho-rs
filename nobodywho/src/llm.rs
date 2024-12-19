@@ -1,5 +1,6 @@
 use crate::chat_state;
 use llama_cpp_2::context::params::LlamaContextParams;
+use llama_cpp_2::context::LlamaContext;
 use llama_cpp_2::llama_backend::LlamaBackend;
 use llama_cpp_2::llama_batch::LlamaBatch;
 use llama_cpp_2::model::params::LlamaModelParams;
@@ -11,7 +12,6 @@ use std::pin::pin;
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, LazyLock};
 
-// the longest token I've seen is llama3.2's token 119224, at 96 bytes
 const MAX_TOKEN_STR_LEN: usize = 128;
 
 static LLAMA_BACKEND: LazyLock<LlamaBackend> =
@@ -123,7 +123,7 @@ fn make_sampler(model: &LlamaModel, config: SamplerConfig) -> LlamaSampler {
             //LlamaSampler::mirostat_v2(config.seed, config.mirostat_tau, config.mirostat_eta),
             LlamaSampler::dist(config.seed),
         ],
-        true, // no pperf
+        true, // Do not calculate performance metrics
     )
 }
 
@@ -149,6 +149,9 @@ pub enum WorkerError {
 
     #[error("Lama.cpp failed fetching chat template: {0}")]
     ChatTemplateError(#[from] llama_cpp_2::ChatTemplateError),
+
+    #[error("Lama.cpp failed fetching chat template: {0}")]
+    KvCacheConversionError(#[from] llama_cpp_2::context::kv_cache::KvCacheConversionError),
 
     #[error("Failed applying the jinja chat template: {0}")]
     ApplyTemplateError(#[from] minijinja::Error),
@@ -188,8 +191,29 @@ fn add_sequence(
     Ok(())
 }
 
-/// Main entry point for the completion worker thread.
-/// Wraps the actual worker implementation to handle error reporting.
+/// Performs context window shifting by discarding old tokens and shifting remaining ones left.
+/// This prevents context overflow by removing older tokens when nearing context length limits.
+/// As implemented in <https://github.com/ggerganov/llama.cpp/blob/3b4f2e33e2cbfca621e623c4b92b88da57a8c2f4/examples/main/main.cpp#L528>
+///
+/// # Arguments
+/// * `ctx` - LLaMA context to perform shifting on
+/// * `pos` - Current position in context window
+///
+/// # Returns
+/// * `Ok(n_discard)` - Number of tokens discarded from start of context
+/// * `Err(WorkerError)` - If cache operations fail
+fn apply_context_shifting(ctx: &mut LlamaContext, pos: i32) -> Result<i32, WorkerError> {
+    let n_discard = pos / 2;
+
+    // Delete the first `n_discard` tokens
+    ctx.clear_kv_cache_seq(Some(0), None, Some(n_discard as u32))?;
+
+    // Shift the context left with `n_discard` tokens
+    ctx.kv_cache_seq_add(0, Some(n_discard as u32), Some(pos as u32), -n_discard)?;
+
+    Ok(n_discard)
+}
+
 pub fn run_completion_worker(
     model: Arc<LlamaModel>,
     message_rx: Receiver<String>,
@@ -234,14 +258,6 @@ fn run_completion_worker_result(
     n_ctx: u32,
     system_prompt: String,
 ) -> Result<(), WorkerError> {
-    // Initialize chat state with model's chat template
-    let mut chat_state = chat_state::ChatState::new(
-        model.get_chat_template(4_000)?,
-        model.token_to_str(model.token_bos(), Special::Tokenize)?,
-        model.token_to_str(model.token_eos(), Special::Tokenize)?,
-    );
-    chat_state.add_message("system".to_string(), system_prompt);
-
     // Set up context parameters using available parallelism
     let n_threads = std::thread::available_parallelism()?.get() as i32;
     let n_ctx = std::cmp::min(n_ctx, model.n_ctx_train());
@@ -253,6 +269,15 @@ fn run_completion_worker_result(
     // Create inference context and sampler
     let mut ctx = model.new_context(&LLAMA_BACKEND, ctx_params)?;
     let mut sampler = make_sampler(&model, sampler_config);
+
+    // Initialize chat state with model's chat template
+    let mut chat_state = chat_state::ChatState::new(
+        model.get_chat_template(4_000)?,
+        model.token_to_str(model.token_bos(), Special::Tokenize)?,
+        model.token_to_str(model.token_eos(), Special::Tokenize)?,
+    );
+
+    chat_state.add_message("system".to_string(), system_prompt);
 
     let mut n_cur = 0; // Current position in context window
     let mut response = String::new();
@@ -274,7 +299,9 @@ fn run_completion_worker_result(
         loop {
             // Check for context window overflow
             if n_cur + batch.n_tokens() >= ctx.n_ctx() as i32 {
-                return Err(WorkerError::ContextLengthExceededError);
+                n_cur -= apply_context_shifting(&mut ctx, n_cur)?;
+
+                assert!(n_cur + batch.n_tokens() >= ctx.n_ctx() as i32);
             }
 
             // Process current batch
@@ -303,7 +330,7 @@ fn run_completion_worker_result(
 
             // Prepare batch for next token
             batch.clear();
-            batch.add(new_token, n_cur as i32, &[0], true)?;
+            batch.add(new_token, n_cur, &[0], true)?;
         }
 
         // Process final batch and update chat state
