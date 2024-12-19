@@ -83,6 +83,7 @@ jobs:
           . "$HOME/.cargo/env"
           rustup update stable
           rustup default stable
+          rustup target add ${{ matrix.target }}
           echo "$HOME/.cargo/bin" >> $GITHUB_PATH
 
       - name: "Install distro dependencies"
