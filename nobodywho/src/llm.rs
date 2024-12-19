@@ -85,19 +85,22 @@ pub struct SamplerConfig {
     pub mirostat_eta: f32,
 }
 
-// defaults here match the defaults read from `llama-cli --help`
-pub const DEFAULT_SAMPLER_CONFIG: SamplerConfig = SamplerConfig {
-    seed: 1234,
-    temperature: 0.8,
-    penalty_last_n: -1,
-    penalty_repeat: 0.0,
-    penalty_freq: 0.0,
-    penalty_present: 0.0,
-    penalize_nl: false,
-    ignore_eos: false,
-    mirostat_tau: 5.0,
-    mirostat_eta: 0.1,
-};
+impl Default for SamplerConfig {
+    fn default() -> Self {
+        SamplerConfig {
+            seed: 1234,
+            temperature: 0.8,
+            penalty_last_n: -1,
+            penalty_repeat: 0.0,
+            penalty_freq: 0.0,
+            penalty_present: 0.0,
+            penalize_nl: false,
+            ignore_eos: false,
+            mirostat_tau: 5.0,
+            mirostat_eta: 0.1,
+        }
+    }
+}
 
 fn make_sampler(model: &LlamaModel, config: SamplerConfig) -> LlamaSampler {
     // init mirostat sampler
@@ -388,7 +391,7 @@ mod tests {
                 model,
                 prompt_rx,
                 completion_tx,
-                DEFAULT_SAMPLER_CONFIG,
+                SamplerConfig::default(),
                 4096,
                 system_prompt,
             )

@@ -42,18 +42,19 @@ struct NobodyWhoSampler {
 #[godot_api]
 impl IResource for NobodyWhoSampler {
     fn init(base: Base<Resource>) -> Self {
+        let sampler_config = SamplerConfig::default();
         Self {
             base,
-            seed: llm::DEFAULT_SAMPLER_CONFIG.seed,
-            temperature: llm::DEFAULT_SAMPLER_CONFIG.temperature,
-            penalty_last_n: llm::DEFAULT_SAMPLER_CONFIG.penalty_last_n,
-            penalty_repeat: llm::DEFAULT_SAMPLER_CONFIG.penalty_repeat,
-            penalty_freq: llm::DEFAULT_SAMPLER_CONFIG.penalty_freq,
-            penalty_present: llm::DEFAULT_SAMPLER_CONFIG.penalty_present,
-            penalize_nl: llm::DEFAULT_SAMPLER_CONFIG.penalize_nl,
-            ignore_eos: llm::DEFAULT_SAMPLER_CONFIG.ignore_eos,
-            mirostat_tau: llm::DEFAULT_SAMPLER_CONFIG.mirostat_tau,
-            mirostat_eta: llm::DEFAULT_SAMPLER_CONFIG.mirostat_eta,
+            seed: sampler_config.seed,
+            temperature: sampler_config.temperature,
+            penalty_last_n: sampler_config.penalty_last_n,
+            penalty_repeat: sampler_config.penalty_repeat,
+            penalty_freq: sampler_config.penalty_freq,
+            penalty_present: sampler_config.penalty_present,
+            penalize_nl: sampler_config.penalize_nl,
+            ignore_eos: sampler_config.ignore_eos,
+            mirostat_tau: sampler_config.mirostat_tau,
+            mirostat_eta: sampler_config.mirostat_eta,
         }
     }
 }
@@ -205,7 +206,7 @@ impl NobodyWhoChat {
             let nobody_sampler: GdRef<NobodyWhoSampler> = gd_sampler.bind();
             nobody_sampler.get_sampler_config()
         } else {
-            llm::DEFAULT_SAMPLER_CONFIG
+            SamplerConfig::default()
         }
     }
 
