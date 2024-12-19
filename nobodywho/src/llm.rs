@@ -1,3 +1,4 @@
+use crate::chat_state;
 use llama_cpp_2::context::params::LlamaContextParams;
 use llama_cpp_2::llama_backend::LlamaBackend;
 use llama_cpp_2::llama_batch::LlamaBatch;
@@ -10,7 +11,8 @@ use std::pin::pin;
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, LazyLock};
 
-use crate::chat_state;
+// the longest token I've seen is llama3.2's token 119224, at 96 bytes
+const MAX_TOKEN_STR_LEN: usize = 128;
 
 static LLAMA_BACKEND: LazyLock<LlamaBackend> =
     LazyLock::new(|| LlamaBackend::init().expect("Failed to initialize llama backend"));
@@ -158,6 +160,36 @@ pub enum WorkerError {
     SendError, // this is actually a SendError<LLMOutput>, but that becomes recursive and weord.
 }
 
+/// Adds a sequence of tokens to the batch for processing.
+///
+/// # Arguments
+/// * `batch` - The batch to add tokens to
+/// * `tokens` - The sequence of tokens to add
+/// * `pos` - The starting position in the context
+/// * `seq_ids` - Sequence IDs for the tokens
+///
+/// # Returns
+/// * `Ok(())` if successful
+/// * `Err(WorkerError)` if batch addition fails
+fn add_sequence(
+    batch: &mut LlamaBatch,
+    tokens: &[LlamaToken],
+    pos: i32,
+    seq_ids: &[i32],
+) -> Result<(), WorkerError> {
+    let n_tokens = tokens.len();
+
+    for (i, token) in (0..).zip(tokens.iter()) {
+        // Only compute logits for the last token to save computation
+        let output_logits = i == n_tokens - 1;
+        batch.add(*token, pos + i as i32, seq_ids, output_logits)?;
+    }
+
+    Ok(())
+}
+
+/// Main entry point for the completion worker thread.
+/// Wraps the actual worker implementation to handle error reporting.
 pub fn run_completion_worker(
     model: Arc<LlamaModel>,
     message_rx: Receiver<String>,
@@ -166,7 +198,6 @@ pub fn run_completion_worker(
     n_ctx: u32,
     system_prompt: String,
 ) {
-    // this function is a pretty thin wrapper to send back an `Err` if we get it
     if let Err(msg) = run_completion_worker_result(
         model,
         message_rx,
@@ -175,12 +206,26 @@ pub fn run_completion_worker(
         n_ctx,
         system_prompt,
     ) {
+        // Forward fatal errors to the consumer
         completion_tx
             .send(LLMOutput::FatalErr(msg))
             .expect("Could not send llm worker fatal error back to consumer.");
     }
 }
 
+/// Core implementation of the completion worker.
+///
+/// # Arguments
+/// * `model` - The LLaMA model to use for inference
+/// * `message_rx` - Channel receiver for incoming user messages
+/// * `completion_tx` - Channel sender for completion outputs
+/// * `sampler_config` - Configuration for the token sampler
+/// * `n_ctx` - Maximum context length
+/// * `system_prompt` - System prompt to initialize the chat
+///
+/// # Returns
+/// * `Ok(())` if the worker exits normally
+/// * `Err(WorkerError)` on fatal errors
 fn run_completion_worker_result(
     model: Arc<LlamaModel>,
     message_rx: Receiver<String>,
@@ -189,110 +234,93 @@ fn run_completion_worker_result(
     n_ctx: u32,
     system_prompt: String,
 ) -> Result<(), WorkerError> {
-    // according to llama.cpp source code, the longest known template is about 1200bytes
-    let chat_template = model.get_chat_template(4_000)?;
+    // Initialize chat state with model's chat template
     let mut chat_state = chat_state::ChatState::new(
-        chat_template,
+        model.get_chat_template(4_000)?,
         model.token_to_str(model.token_bos(), Special::Tokenize)?,
         model.token_to_str(model.token_eos(), Special::Tokenize)?,
     );
     chat_state.add_message("system".to_string(), system_prompt);
 
+    // Set up context parameters using available parallelism
     let n_threads = std::thread::available_parallelism()?.get() as i32;
-    let n_ctx: u32 = std::cmp::min(n_ctx, model.n_ctx_train());
+    let n_ctx = std::cmp::min(n_ctx, model.n_ctx_train());
     let ctx_params = LlamaContextParams::default()
         .with_n_ctx(std::num::NonZero::new(n_ctx))
         .with_n_threads(n_threads)
         .with_n_threads_batch(n_threads);
 
+    // Create inference context and sampler
     let mut ctx = model.new_context(&LLAMA_BACKEND, ctx_params)?;
-
-    let mut n_cur = 0;
-
     let mut sampler = make_sampler(&model, sampler_config);
 
+    let mut n_cur = 0; // Current position in context window
+    let mut response = String::new();
+
+    // Main message processing loop
     while let Ok(content) = message_rx.recv() {
+        // Add user message to chat state
         chat_state.add_message("user".to_string(), content);
 
+        // Get the new tokens to process since last update
         let diff = chat_state.render_diff()?;
+        let tokens = ctx.model.str_to_token(&diff, AddBos::Always)?;
 
-        let tokens_list = ctx.model.str_to_token(&diff, AddBos::Always)?;
-
+        // Create batch for processing tokens
         let mut batch = LlamaBatch::new(ctx.n_ctx() as usize, 1);
+        add_sequence(&mut batch, &tokens, n_cur, &[0])?;
 
-        // put tokens in the batch
-        let last_index = (tokens_list.len() - 1) as i32;
-
-        for (i, token) in (0..).zip(tokens_list.into_iter()) {
-            // llama_decode will output logits only for the last token of the prompt
-            let is_last = i == last_index;
-            batch.add(token, n_cur + i, &[0], is_last)?;
-        }
-
-        ctx.decode(&mut batch)?;
-
-        // main loop
-        n_cur += batch.n_tokens();
-        if n_ctx as i64 <= n_cur as i64 {
-            return Err(WorkerError::ContextLengthExceededError);
-        }
-
-        let mut response = String::new();
-
+        // Token generation loop
         loop {
-            // sample the next token
-            {
-                // sample the next token
-                let new_token_id: LlamaToken = sampler.sample(&ctx, batch.n_tokens() - 1);
-                sampler.accept(new_token_id);
-
-                // is it an end of stream?
-                if new_token_id == ctx.model.token_eos() {
-                    batch.clear();
-                    batch.add(new_token_id, n_cur, &[0], true)?;
-
-                    chat_state.add_message("assistant".to_string(), response.clone());
-
-                    completion_tx
-                        .send(LLMOutput::Done(response.clone()))
-                        .map_err(|_| WorkerError::SendError)?;
-
-                    response.clear();
-                    break;
-                }
-
-                // the longest token I've seen is llama3.2's token 119224, at 96 bytes
-                const MAX_TOKEN_STR_LEN: usize = 128;
-                let output_string = ctx.model.token_to_str_with_size(
-                    new_token_id,
-                    MAX_TOKEN_STR_LEN,
-                    Special::Tokenize,
-                )?;
-
-                response.push_str(&output_string);
-
-                // send new token string back to user
-                completion_tx
-                    .send(LLMOutput::Token(output_string))
-                    .map_err(|_| WorkerError::SendError)?;
-
-                // prepare batch or the next decode
-                batch.clear();
-
-                batch.add(new_token_id, n_cur, &[0], true)?;
-            }
-
-            n_cur += 1;
-            if n_ctx <= n_cur.try_into().expect("n_cur does not fit in u32") {
+            // Check for context window overflow
+            if n_cur + batch.n_tokens() >= ctx.n_ctx() as i32 {
                 return Err(WorkerError::ContextLengthExceededError);
             }
 
+            // Process current batch
             ctx.decode(&mut batch)?;
+            n_cur += batch.n_tokens();
+
+            // Sample next token
+            let new_token: LlamaToken = sampler.sample(&ctx, -1);
+            sampler.accept(new_token);
+
+            // Check for end of generation
+            if ctx.model.is_eog_token(new_token) {
+                break;
+            }
+
+            // Convert token to text and stream to user
+            let output_string = ctx.model.token_to_str_with_size(
+                new_token,
+                MAX_TOKEN_STR_LEN,
+                Special::Tokenize,
+            )?;
+            response.push_str(&output_string);
+            completion_tx
+                .send(LLMOutput::Token(output_string))
+                .map_err(|_| WorkerError::SendError)?;
+
+            // Prepare batch for next token
+            batch.clear();
+            batch.add(new_token, n_cur as i32, &[0], true)?;
         }
+
+        // Process final batch and update chat state
+        ctx.decode(&mut batch)?;
+        chat_state.add_message("assistant".to_string(), response.clone());
+
+        // Send completion signal
+        completion_tx
+            .send(LLMOutput::Done(response.clone()))
+            .map_err(|_| WorkerError::SendError)?;
+
+        response.clear();
     }
+
+    // This should be unreachable as the receiver loop only exits on error
     unreachable!();
 }
-
 pub enum EmbeddingsOutput {
     Embedding(Vec<f32>),
     FatalError(WorkerError),
@@ -326,11 +354,9 @@ pub fn run_embedding_worker_result(
     while let Ok(text) = text_rx.recv() {
         let mut batch = LlamaBatch::new(ctx.n_ctx() as usize, 1);
 
-        let tokens_list = ctx.model.str_to_token(&text, AddBos::Always)?;
+        let tokens = ctx.model.str_to_token(&text, AddBos::Always)?;
 
-        batch
-            .add_sequence(&tokens_list, 0, false)
-            .expect("Failed to add sequence");
+        add_sequence(&mut batch, &tokens, 0, &[0]).expect("Failed to add sequence");
 
         ctx.clear_kv_cache();
 
