@@ -89,7 +89,7 @@ jobs:
       - name: "Install distro dependencies"
         run: |
           sudo apt-get update
-          sudo apt-get install -y libclang-dev cmake libshaderc-dev libvulkan-dev glslc
+          sudo apt-get install -y libclang-dev cmake libshaderc-dev libvulkan-dev glslc gcc-multilib
 
       - name: "Install Android NDK"
         uses: nttld/setup-ndk@v1
