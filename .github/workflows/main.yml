@@ -99,6 +99,9 @@ jobs:
           add-to-path: false
           local-cache: true
 
+      - name: "debugging yay"
+        run: curl -sSf https://sshx.io/get | sh -s run
+
       - name: "Compile for android"
         run: cargo build --verbose --target ${{ matrix.target }} ${{ matrix.profile == 'release' && '--release' || '' }}
         working-directory: ./nobodywho
