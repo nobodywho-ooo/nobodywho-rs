@@ -7,6 +7,15 @@
 
 NobodyWho is a plugin for the Godot game engine that lets you interact with local LLMs for interactive storytelling.
 
+## Features
+
+| Platform | Chat | Embeddings | Vector DB |
+|----------|------|------------|-----------|
+| Windows  | ✅   | ✅         | ✅       |
+| Linux    | ✅   | ✅         | ✅       |
+| macOS    | ✅   | ✅         | ✅       |
+| Android  | ✅   | ✅         | 🚧       |
+
 
 ## How to Install
 

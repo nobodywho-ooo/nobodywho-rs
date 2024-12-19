@@ -1,6 +1,11 @@
 mod chat_state;
-mod db;
 mod llm;
+
+// HACK:
+// the db module doesn't cross-compile for aarch64-linux-android
+// b/c  rusqlite doesn't cross-compile for aarch64-linux-android
+#[cfg(not(target_os = "android"))]
+mod db;
 
 use godot::classes::{INode, ProjectSettings};
 use godot::prelude::*;
