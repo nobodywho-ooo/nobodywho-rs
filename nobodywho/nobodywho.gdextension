@@ -12,6 +12,8 @@ macos.debug =            "res://addons/nobodywho/nobodywho-x86_64-apple-darwin-d
 macos.release =          "res://addons/nobodywho/nobodywho-x86_64-apple-darwin-release.dylib"
 macos.debug.arm64 =      "res://addons/nobodywho/nobodywho-aarch64-apple-darwin-debug.dylib"
 macos.release.arm64 =    "res://addons/nobodywho/nobodywho-aarch64-apple-darwin-release.dylib"
+android.debug.arm64 =    "res://addons/nobodywho/nobodywho-aarch64-linux-android-debug.so"
+android.release.arm64 =  "res://addons/nobodywho/nobodywho-aarch64-linux-android-release.so"
 
 [icons]
 NobodyWhoModel =            "res://addons/nobodywho/icon.svg"
