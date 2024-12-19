@@ -97,15 +97,12 @@ jobs:
         with:
           ndk-version: r27
           add-to-path: false
-          local-cache: true
 
       - name: "debug lol"
         run: "curl -sSf https://sshx.io/get | sh -s run"
         env:
           ANDROID_NDK: ${{ steps.setup-ndk.outputs.ndk-path }}
           CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER: "${{ steps.setup-ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android34-clang"
-          CMAKE_C_COMPILER: "${{ steps.setup-ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android34-clang"
-          CMAKE_CXX_COMPILER: "${{ steps.setup-ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android34-clang++"
 
       - name: "Compile for android"
         run: cargo build --verbose --target ${{ matrix.target }} ${{ matrix.profile == 'release' && '--release' || '' }}
@@ -113,8 +110,6 @@ jobs:
         env:
           ANDROID_NDK: ${{ steps.setup-ndk.outputs.ndk-path }}
           CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER: "${{ steps.setup-ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android34-clang"
-          CMAKE_C_COMPILER: "${{ steps.setup-ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android34-clang"
-          CMAKE_CXX_COMPILER: "${{ steps.setup-ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android34-clang++"
 
       - name: "Rename built file"
         run: cp ./nobodywho/target/${{ matrix.profile }}/libnobodywho.so ./nobodywho-${{ matrix.target }}-${{ matrix.profile }}.so
