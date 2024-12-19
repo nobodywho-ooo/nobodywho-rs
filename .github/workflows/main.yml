@@ -96,7 +96,7 @@ jobs:
         id: setup-ndk
         with:
           ndk-version: r27
-          add-to-path: false
+          add-to-path: true
           local-cache: true
 
       - name: "Compile for android"
